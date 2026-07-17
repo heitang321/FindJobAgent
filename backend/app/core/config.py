@@ -3,15 +3,20 @@
 使用 pydantic-settings 从环境变量 / .env 文件读取配置。
 """
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = BACKEND_ROOT.parent
 
 
 class Settings(BaseSettings):
     """应用配置，字段对应 .env 文件中的变量名。"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(PROJECT_ROOT / ".env", BACKEND_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -30,6 +35,19 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 天
+
+    # ===== 简历上传 =====
+    # 上传文件的存储目录（相对于 backend 目录）
+    RESUME_UPLOAD_DIR: str = "uploads/resumes"
+
+    # ===== AI 模型（OpenAI 兼容接口）=====
+    # 例如 DeepSeek: AI_BASE_URL=https://api.deepseek.com/v1, AI_MODEL=deepseek-chat
+    AI_API_KEY: str = ""
+    AI_BASE_URL: str = ""
+    AI_MODEL: str = ""
+    AI_ANALYSIS_ENABLED: bool = True
+    AI_TIMEOUT_SECONDS: int = 60
+    AI_TEMPERATURE: float = 0.2
 
     # ===== CORS =====
     # 前端开发服务器地址，允许多个来源用逗号分隔
