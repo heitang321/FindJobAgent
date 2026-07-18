@@ -1,64 +1,72 @@
-"""Tool 1.2: PDF 转 Word 转换器。
+"""Tool 1.2: convert PDF resumes to a layout-preserving Word reference.
 
-确定性操作，不调用 LLM。使用 pdf2docx 库实现 PDF → DOCX 转换。
-如果输入本身就是 docx 则直接跳过，原样返回。
+PDF text is not reconstructed into editable Word paragraphs because that can
+reorder content and destroy the original template. Each PDF page is rendered
+once and embedded as a full-page image, preserving the visible source exactly.
+Agent analysis reads the original PDF separately.
 """
+
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 
+_PDF_RENDER_SCALE = 2
+
+
+def _build_layout_preserving_docx(pdf_path: Path, output_path: Path) -> None:
+    """Embed rendered PDF pages in a Word document without text reflow."""
+    import fitz
+    from docx import Document
+    from docx.enum.text import WD_BREAK, WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt
+
+    document = Document()
+    paragraph = document.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+    run = paragraph.add_run()
+
+    with fitz.open(str(pdf_path)) as pdf:
+        if pdf.page_count == 0:
+            raise ValueError("PDF contains no pages")
+
+        first_page = pdf[0]
+        section = document.sections[0]
+        section.page_width = Pt(first_page.rect.width)
+        section.page_height = Pt(first_page.rect.height)
+        section.top_margin = Pt(0)
+        section.bottom_margin = Pt(0)
+        section.left_margin = Pt(0)
+        section.right_margin = Pt(0)
+        section.header_distance = Pt(0)
+        section.footer_distance = Pt(0)
+
+        matrix = fitz.Matrix(_PDF_RENDER_SCALE, _PDF_RENDER_SCALE)
+        for index, page in enumerate(pdf):
+            if index:
+                run.add_break(WD_BREAK.PAGE)
+            page_png = page.get_pixmap(matrix=matrix, alpha=False).tobytes("png")
+            run.add_picture(
+                BytesIO(page_png),
+                width=Pt(page.rect.width),
+                height=Pt(page.rect.height),
+            )
+
+    document.save(output_path)
+
+
 def pdf_to_word_converter(file_path: str) -> dict[str, object]:
-    """将 PDF 简历转换为 DOCX 格式。
+    """Convert PDF to a visually faithful DOCX; pass DOCX through unchanged.
 
-    使用 ``pdf2docx`` 库实现确定性转换。如果输入文件本身就是 ``.docx``，
-    则直接跳过转换，原样返回成功结果。
-
-    Parameters
-    ----------
-    file_path:
-        PDF 或 DOCX 文件的路径。
-
-    Returns
-    -------
-    dict[str, object]
-        包含 ``converted_path``（转换后文件路径 str）和 ``success``（是否成功 bool）。
-        对于非 PDF/DOCX 文件，返回 ``success=False``。
+    The PDF result is intended as a read-only reference preserving the source
+    template. It is deliberately image-based and should not be used as the
+    editable Agent 3 optimization output.
     """
     path = Path(file_path)
     suffix = path.suffix.lower()
-
-    # 如果输入本身就是 docx，直接跳过转换
-    if suffix == ".docx":
-        return {"converted_path": str(path), "success": True}
-
-    # 非 PDF 文件无法转换
-    if suffix != ".pdf":
-        return {"converted_path": str(path), "success": False}
-
-    # PDF → DOCX 转换
-    converted_path = path.with_suffix(".docx")
-    try:
-        from pdf2docx import Converter
-
-        converter = Converter(str(path))
-        try:
-            converter.convert(str(converted_path), start=0, end=None)
-        finally:
-            converter.close()
-    except Exception:
-        # 转换失败（如 pdf2docx 未安装或文件损坏）
-        return {"converted_path": str(converted_path), "success": False}
-
-    return {"converted_path": str(converted_path), "success": converted_path.exists()}
-"""Tool 1.2: convert PDF resumes to DOCX when needed."""
-from pathlib import Path
-
-
-def pdf_to_word_converter(file_path: str) -> dict[str, object]:
-    """Convert a PDF to DOCX with pdf2docx; pass DOCX through unchanged."""
-    path = Path(file_path)
-    suffix = path.suffix.lower()
     if suffix == ".docx":
         return {"converted_path": str(path), "success": True}
     if suffix != ".pdf":
@@ -66,13 +74,7 @@ def pdf_to_word_converter(file_path: str) -> dict[str, object]:
 
     converted_path = path.with_suffix(".docx")
     try:
-        from pdf2docx import Converter
-
-        converter = Converter(str(path))
-        try:
-            converter.convert(str(converted_path), start=0, end=None)
-        finally:
-            converter.close()
+        _build_layout_preserving_docx(path, converted_path)
     except Exception:
         return {"converted_path": str(converted_path), "success": False}
 

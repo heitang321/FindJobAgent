@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     AI_TIMEOUT_SECONDS: int = 60
     AI_TEMPERATURE: float = 0.2
 
+    # ===== Agent 3 简历优化 =====
+    OPTIMIZATION_OUTPUT_DIR: str = "outputs/optimized_resumes"
+    OPTIMIZATION_MAX_WORKERS: int = 4
+
     # ===== CORS =====
     # 前端开发服务器地址，允许多个来源用逗号分隔
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
