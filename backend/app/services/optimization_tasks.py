@@ -17,6 +17,10 @@ def prepare_optimization_task(task_id: str) -> WorkflowState:
         raise ValueError("Resume analysis must finish before optimization.")
     if not state.get("job_requirements"):
         raise ValueError("Job analysis must finish before optimization.")
+    if not state.get("match_result") and not state.get("gap_report"):
+        raise ValueError(
+            "Job match result or gap report is required before optimization."
+        )
 
     state["current_stage"] = "optimizing"
     state["error"] = None

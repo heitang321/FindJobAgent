@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+import tempfile
+from typing import Any, Iterable
+
+from app.tools.docx_template_editor import DocumentTextEdit, apply_resume_text_edits
+from app.tools.pdf_template_editor import PdfTextEdit, apply_resume_pdf_edits
+from app.tools.pdf_to_word_converter import pdf_to_layout_preserving_docx
 
 
 _FONT_LATIN = "Calibri"
@@ -24,28 +29,17 @@ def _set_run_font(run, *, size=None, bold=None, color=None) -> None:
         run.font.color.rgb = color
 
 
-def _clear_template_body(document) -> None:
-    """Remove template sample content while retaining styles and section data."""
-    from docx.oxml.ns import qn
-
-    body = document._element.body
-    for child in list(body):
-        if child.tag != qn("w:sectPr"):
-            body.remove(child)
-
-
-def _configure_document(document, preserve_geometry: bool) -> None:
+def _configure_document(document) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Inches, Pt, RGBColor
 
     section = document.sections[0]
-    if not preserve_geometry:
-        section.page_width = Inches(8.5)
-        section.page_height = Inches(11)
-        section.top_margin = Inches(1)
-        section.bottom_margin = Inches(1)
-        section.left_margin = Inches(1)
-        section.right_margin = Inches(1)
+    section.page_width = Inches(8.5)
+    section.page_height = Inches(11)
+    section.top_margin = Inches(1)
+    section.bottom_margin = Inches(1)
+    section.left_margin = Inches(1)
+    section.right_margin = Inches(1)
 
     normal = document.styles["Normal"]
     normal.font.name = _FONT_LATIN
@@ -168,26 +162,50 @@ def generate_resume_document(
     optimized_resume: dict[str, Any],
     output_path: str,
     template_path: str | None = None,
+    *,
+    source_document_path: str | None = None,
+    text_edits: Iterable[DocumentTextEdit | dict[str, Any]] = (),
+    pdf_text_edits: Iterable[PdfTextEdit] = (),
+    missing_skills_text: str = "",
 ) -> str:
     """Generate an editable Word resume and return its absolute path.
 
-    With ``template_path``, the template's styles, page geometry, headers, and
-    footers are retained while its sample body is removed.
+    When a source document is supplied, edit verified text slots in a copy of
+    that DOCX. The source's layout and every package part except the body XML
+    remain untouched. ``template_path`` is retained as a legacy alias for the
+    source document path.
     """
     from docx import Document
 
     destination = Path(output_path).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    if template_path:
-        document = Document(str(Path(template_path).resolve()))
-        _clear_template_body(document)
-        preserve_geometry = True
-    else:
-        document = Document()
-        preserve_geometry = False
+    source = source_document_path or template_path
+    if source:
+        source_path = Path(source).resolve()
+        if source_path.suffix.casefold() == ".pdf":
+            with tempfile.NamedTemporaryFile(
+                dir=destination.parent,
+                prefix=f".{destination.stem}-",
+                suffix=".pdf",
+                delete=False,
+            ) as temporary_file:
+                temporary_pdf = Path(temporary_file.name)
+            try:
+                apply_resume_pdf_edits(source_path, temporary_pdf, pdf_text_edits)
+                return pdf_to_layout_preserving_docx(temporary_pdf, destination)
+            finally:
+                if temporary_pdf.exists():
+                    temporary_pdf.unlink()
+        return apply_resume_text_edits(
+            source_path,
+            destination,
+            text_edits,
+            missing_skills_text=missing_skills_text,
+        )
 
-    _configure_document(document, preserve_geometry=preserve_geometry)
+    document = Document()
+    _configure_document(document)
     _add_resume_header(document, optimized_resume.get("basic_info") or {})
     _add_education(document, optimized_resume.get("education") or [])
     _add_experience_sections(document, optimized_resume)

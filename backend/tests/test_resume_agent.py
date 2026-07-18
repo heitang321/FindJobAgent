@@ -4,6 +4,7 @@
 document_text_extractor / resume_structurer）以及 Agent 的线性执行流程
 和 State 传递逻辑。
 """
+
 from pathlib import Path
 import sys
 import zipfile
@@ -274,12 +275,28 @@ class TestResumeStructurer:
 
     def test_fallback_extracts_phone_and_email(self):
         """fallback 模式提取电话和邮箱。"""
-        text = "姓名：张三\n电话：13800138000\n邮箱：test@example.com\n技能：Python、SQL"
+        text = (
+            "姓名：张三\n电话：13800138000\n邮箱：test@example.com\n技能：Python、SQL"
+        )
         result = resume_structurer(text, llm=None)
         assert result["structured_resume"]["basic_info"]["phone"] == "13800138000"
         assert result["structured_resume"]["basic_info"]["email"] == "test@example.com"
         assert result["structured_resume"]["basic_info"]["name"] == "张三"
         assert "Python" in result["structured_resume"]["skills"]
+
+    def test_fallback_extracts_explicit_technologies_without_skills_heading(self):
+        """没有技能标题时，从项目正文提取明确出现过的技术词。"""
+        text = """
+        项目经历
+        DocMind —— 基于 RAG 的智能知识库问答系统
+        使用 FAISS 构建向量索引，通过 Redis 实现缓存和限流，使用 Docker 部署。
+        """
+
+        result = resume_structurer(text, llm=None)
+
+        assert {"RAG", "FAISS", "Redis", "Docker"}.issubset(
+            set(result["structured_resume"]["skills"])
+        )
 
     def test_fallback_extracts_pipe_style_pdf_resume(self):
         """fallback 能处理 PDF 提取出的管道分隔中文简历信息。"""
@@ -337,6 +354,7 @@ class TestResumeStructurer:
 
     def test_injected_llm_dict_response(self):
         """注入 LLM 返回 dict 时正确解析。"""
+
         def fake_llm(prompt: str):
             assert "简历原文" in prompt
             return {
@@ -348,7 +366,12 @@ class TestResumeStructurer:
                         "location": "广州",
                     },
                     "education": [
-                        {"school": "中山大学", "major": "软件工程", "degree": "本科", "period": "2020-2024"}
+                        {
+                            "school": "中山大学",
+                            "major": "软件工程",
+                            "degree": "本科",
+                            "period": "2020-2024",
+                        }
                     ],
                     "work_experience": [],
                     "project_experience": [
@@ -375,22 +398,29 @@ class TestResumeStructurer:
         import json
 
         def fake_llm(prompt: str):
-            return json.dumps({
-                "structured_resume": {
-                    "basic_info": {"name": "李四", "phone": "", "email": "", "location": ""},
-                    "education": [],
-                    "work_experience": [],
-                    "project_experience": [],
-                    "skills": ["Java"],
-                    "self_evaluation": "",
-                },
-                "evaluation": {
-                    "completeness_score": 50,
-                    "strengths": [],
-                    "weaknesses": ["缺少经历"],
-                    "missing_sections": ["教育经历", "工作经历"],
-                },
-            })
+            return json.dumps(
+                {
+                    "structured_resume": {
+                        "basic_info": {
+                            "name": "李四",
+                            "phone": "",
+                            "email": "",
+                            "location": "",
+                        },
+                        "education": [],
+                        "work_experience": [],
+                        "project_experience": [],
+                        "skills": ["Java"],
+                        "self_evaluation": "",
+                    },
+                    "evaluation": {
+                        "completeness_score": 50,
+                        "strengths": [],
+                        "weaknesses": ["缺少经历"],
+                        "missing_sections": ["教育经历", "工作经历"],
+                    },
+                }
+            )
 
         result = resume_structurer("姓名：李四", llm=fake_llm)
         assert result["structured_resume"]["basic_info"]["name"] == "李四"
@@ -398,6 +428,7 @@ class TestResumeStructurer:
 
     def test_injected_llm_markdown_wrapped_response(self):
         """注入 LLM 返回 markdown 代码块包裹的 JSON 时正确解析。"""
+
         def fake_llm(prompt: str):
             return '```json\n{"structured_resume": {"basic_info": {"name": "王五", "phone": "", "email": "", "location": ""}, "education": [], "work_experience": [], "project_experience": [], "skills": [], "self_evaluation": ""}, "evaluation": {"completeness_score": 20, "strengths": [], "weaknesses": [], "missing_sections": []}}\n```'
 
@@ -406,17 +437,28 @@ class TestResumeStructurer:
 
     def test_injected_llm_score_clamped(self):
         """LLM 返回的评分超出范围时被 clamp 到 0-100。"""
+
         def fake_llm(prompt: str):
             return {
                 "structured_resume": {
-                    "basic_info": {"name": "", "phone": "", "email": "", "location": ""},
+                    "basic_info": {
+                        "name": "",
+                        "phone": "",
+                        "email": "",
+                        "location": "",
+                    },
                     "education": [],
                     "work_experience": [],
                     "project_experience": [],
                     "skills": [],
                     "self_evaluation": "",
                 },
-                "evaluation": {"completeness_score": 150, "strengths": [], "weaknesses": [], "missing_sections": []},
+                "evaluation": {
+                    "completeness_score": 150,
+                    "strengths": [],
+                    "weaknesses": [],
+                    "missing_sections": [],
+                },
             }
 
         result = resume_structurer("text", llm=fake_llm)
@@ -446,7 +488,7 @@ class TestResumeStructurer:
             }
 
         monkeypatch.setattr(
-            "app.ai.model.openai_compatible.chat_completion", fake_chat_completion
+            "app.model.openai_compatible.chat_completion", fake_chat_completion
         )
 
         result = resume_structurer("姓名：赵六", use_configured_llm=True)
@@ -559,7 +601,15 @@ class TestResumeAnalysisAgentRun:
     def test_run_docx_full_pipeline(self, tmp_path):
         """docx 文件的完整流程：1.1 → 1.2(skip) → 1.3 → 1.4。"""
         docx = tmp_path / "resume.docx"
-        make_docx(docx, ["姓名：李四", "电话：13900139000", "技能：Python、SQL", "项目经历：数据平台"])
+        make_docx(
+            docx,
+            [
+                "姓名：李四",
+                "电话：13900139000",
+                "技能：Python、SQL",
+                "项目经历：数据平台",
+            ],
+        )
         state = initial_workflow_state(task_id="task-1", file_path=str(docx))
 
         final_state = run_resume_analysis_agent(state, use_configured_llm=False)
@@ -608,7 +658,9 @@ class TestResumeAnalysisAgentRun:
         def callback(s):
             updates.append(s["current_stage"])
 
-        run_resume_analysis_agent(state, on_state_update=callback, use_configured_llm=False)
+        run_resume_analysis_agent(
+            state, on_state_update=callback, use_configured_llm=False
+        )
 
         # 应该至少有 analyzing 和 done
         assert "analyzing" in updates
@@ -647,7 +699,10 @@ class TestResumeAnalysisAgentRun:
 
         assert final_state["current_stage"] == "done"
         assert final_state["structured_resume"]["basic_info"]["name"] == "赵六"
-        assert final_state["structured_resume"]["basic_info"]["email"] == "zhao@example.com"
+        assert (
+            final_state["structured_resume"]["basic_info"]["email"]
+            == "zhao@example.com"
+        )
         assert final_state["resume_evaluation"]["completeness_score"] == 75
 
     def test_agent_class_directly(self, tmp_path):

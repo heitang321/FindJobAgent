@@ -167,24 +167,28 @@ def _extract_skills(raw_text: str) -> list[str]:
         "专业技能",
         ["工作经历", "项目经历", "教育经历", "资格证书", "个人优势", "程智涵 |"],
     )
-    if not skill_section:
-        return []
-
-    numbered_items = re.findall(
-        r"(?:^|\n)\s*\d+[.、]\s*(.*?)(?=(?:\n\s*\d+[.、]\s*)|\Z)",
-        skill_section,
-        flags=re.S,
-    )
-    if numbered_items:
-        return [" ".join(item.split()) for item in numbered_items if item.strip()]
+    if skill_section:
+        numbered_items = re.findall(
+            r"(?:^|\n)\s*\d+[.、]\s*(.*?)(?=(?:\n\s*\d+[.、]\s*)|\Z)",
+            skill_section,
+            flags=re.S,
+        )
+        if numbered_items:
+            return [" ".join(item.split()) for item in numbered_items if item.strip()]
 
     known_skills = [
         "Python",
         "LangChain",
         "ReAct",
         "RAG",
+        "FAISS",
+        "sentence-transformers",
         "FastAPI",
         "WebSocket",
+        "SSE",
+        "Redis",
+        "Celery",
+        "Vue 3",
         "Docker Compose",
         "Docker",
         "SQLite",
@@ -196,10 +200,11 @@ def _extract_skills(raw_text: str) -> list[str]:
         "Java",
         "C/C++",
     ]
+    search_text = skill_section or raw_text
     return [
         skill
         for skill in known_skills
-        if re.search(re.escape(skill), skill_section, re.I)
+        if re.search(re.escape(skill), search_text, re.I)
     ]
 
 

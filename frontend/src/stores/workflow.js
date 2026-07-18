@@ -149,6 +149,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
   // ===== 步骤 3：触发优化 =====
   async function optimize() {
     if (!taskId.value) throw new Error('还没有上传简历')
+    error.value = ''
+    optimizedResume.value = null
+    diffReport.value = null
+    optimizationSummary.value = null
+    downloadReady.value = false
     stage.value = 'optimizing'
     try {
       await triggerOptimization(taskId.value)
@@ -165,21 +170,32 @@ export const useWorkflowStore = defineStore('workflow', () => {
     optimizePollTimer = window.setInterval(async () => {
       try {
         const data = await getOptimizationResult(taskId.value)
-        optimizedResume.value = data.optimized_resume || null
-        diffReport.value = data.diff_report || null
-        optimizationSummary.value = data.optimization_summary || null
-        downloadReady.value = data.download_ready || false
+        const sections = data.diff_report?.sections
+        optimizedResume.value = Object.keys(data.optimized_resume || {}).length
+          ? data.optimized_resume
+          : null
+        diffReport.value = Array.isArray(sections) && sections.length
+          ? data.diff_report
+          : null
+        optimizationSummary.value = Object.keys(data.optimization_summary || {}).length
+          ? data.optimization_summary
+          : null
+        downloadReady.value = Boolean(data.download_ready)
 
         if (data.current_stage !== 'optimizing') {
           if (optimizePollTimer) {
             window.clearInterval(optimizePollTimer)
             optimizePollTimer = null
           }
-          if (data.error) {
+          if (data.current_stage === 'error' || data.error) {
             stage.value = 'error'
-            error.value = data.error
-          } else {
+            error.value = data.error || '简历优化失败'
+          } else if (data.current_stage === 'done') {
             stage.value = 'done'
+            error.value = ''
+          } else {
+            stage.value = 'error'
+            error.value = `未知的优化任务状态：${data.current_stage || '空'}`
           }
         }
       } catch (e) {

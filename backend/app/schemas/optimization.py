@@ -28,6 +28,7 @@ class SectionRewriteRequest(BaseModel):
 
     section_type: SectionType
     original_content: str
+    evidence_context: str = ""
     gap_report: dict[str, Any] = Field(default_factory=dict)
     job_requirements: dict[str, Any] = Field(default_factory=dict)
     job_keywords: list[str] = Field(default_factory=list)

@@ -80,6 +80,17 @@ class TestOptimizationApi:
 
         assert response.status_code == 409
 
+    def test_trigger_requires_match_or_gap_result(self):
+        state = _ready_state("task-without-match-result")
+        state["match_result"] = {}
+        state["gap_report"] = {}
+        resume_task_store.set(state["task_id"], state)
+
+        response = _client().post("/api/v1/optimize/task-without-match-result")
+
+        assert response.status_code == 409
+        assert "match result" in response.json()["detail"].casefold()
+
     def test_missing_task_returns_404(self):
         response = _client().get("/api/v1/optimize/missing/result")
         assert response.status_code == 404

@@ -18,6 +18,12 @@ let pollTimer = null
 const sections = computed(() => result.value?.diff_report?.sections || [])
 const summary = computed(() => result.value?.optimization_summary || {})
 const isRunning = computed(() => result.value?.current_stage === 'optimizing')
+const isDone = computed(() => result.value?.current_stage === 'done')
+const statusType = computed(() => {
+  if (isDone.value) return 'success'
+  if (result.value?.current_stage === 'error') return 'danger'
+  return 'warning'
+})
 
 function stopPolling() {
   if (pollTimer) {
@@ -41,6 +47,9 @@ async function loadResult() {
     } else {
       stopPolling()
     }
+  } catch (error) {
+    stopPolling()
+    ElMessage.error(error.response?.data?.detail || error.message || '获取优化结果失败')
   } finally {
     loading.value = false
   }
@@ -58,6 +67,8 @@ async function startOptimization() {
       optimization_summary: {},
     }
     startPolling()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || error.message || '启动简历优化失败')
   } finally {
     triggering.value = false
   }
@@ -93,7 +104,7 @@ onBeforeUnmount(stopPolling)
         <p>任务 ID：{{ taskId }}</p>
       </div>
       <div class="actions">
-        <el-tag v-if="result" :type="result.current_stage === 'done' ? 'success' : 'warning'">
+        <el-tag v-if="result" :type="statusType">
           {{ result.current_stage }}
         </el-tag>
         <el-button type="primary" :loading="triggering || isRunning" @click="startOptimization">
@@ -118,7 +129,7 @@ onBeforeUnmount(stopPolling)
       class="error-alert"
     />
 
-    <el-row v-if="result" :gutter="16" class="summary-row">
+    <el-row v-if="isDone" :gutter="16" class="summary-row">
       <el-col :span="6">
         <el-statistic title="新增" :value="summary.added_count || 0" />
       </el-col>
@@ -133,14 +144,14 @@ onBeforeUnmount(stopPolling)
       </el-col>
     </el-row>
 
-    <el-card v-if="summary.added_keywords?.length" class="keyword-card">
+    <el-card v-if="isDone && summary.added_keywords?.length" class="keyword-card">
       <span class="card-label">新增岗位关键词：</span>
       <el-tag v-for="keyword in summary.added_keywords" :key="keyword" class="keyword-tag">
         {{ keyword }}
       </el-tag>
     </el-card>
 
-    <div v-if="sections.length" class="comparison-list">
+    <div v-if="isDone && sections.length" class="comparison-list">
       <el-card
         v-for="section in sections"
         :key="`${section.section_type}-${section.section_index}`"
@@ -189,7 +200,10 @@ onBeforeUnmount(stopPolling)
       </el-card>
     </div>
 
-    <el-empty v-else-if="result && !isRunning" description="暂无优化对比数据" />
+    <el-empty
+      v-else-if="isDone && !sections.length"
+      description="优化任务已完成，但未返回可展示的段落对比"
+    />
   </div>
 </template>
 

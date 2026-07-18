@@ -58,6 +58,22 @@ def _build_layout_preserving_docx(pdf_path: Path, output_path: Path) -> None:
     document.save(output_path)
 
 
+def pdf_to_layout_preserving_docx(
+    pdf_path: str | Path,
+    output_path: str | Path,
+) -> str:
+    """Embed PDF pages into an explicitly named Word output file."""
+    source = Path(pdf_path).resolve()
+    destination = Path(output_path).resolve()
+    if source.suffix.casefold() != ".pdf" or not source.is_file():
+        raise ValueError("A valid PDF source is required.")
+    if destination.suffix.casefold() != ".docx":
+        raise ValueError("The layout-preserving output must be a DOCX file.")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _build_layout_preserving_docx(source, destination)
+    return str(destination)
+
+
 def pdf_to_word_converter(file_path: str) -> dict[str, object]:
     """Convert PDF to a visually faithful DOCX; pass DOCX through unchanged.
 

@@ -16,13 +16,17 @@ const isRunning = computed(() => wf.isRunning)
 const showUpload = computed(() => ['idle', 'uploading'].includes(stage.value))
 const showResumeResult = computed(() => !!wf.structuredResume)
 const showJdInput = computed(() =>
-  ['job_input', 'job_analyzing', 'ready_to_optimize', 'optimizing', 'done'].includes(stage.value),
+  ['job_input', 'job_analyzing', 'ready_to_optimize', 'optimizing', 'done'].includes(stage.value)
+    || (stage.value === 'error' && !!wf.structuredResume),
 )
 const showMatchResult = computed(() => !!wf.matchResult)
 const showOptimizeButton = computed(() =>
-  ['ready_to_optimize', 'optimizing', 'done'].includes(stage.value),
+  ['ready_to_optimize', 'optimizing', 'done'].includes(stage.value)
+    || (stage.value === 'error' && !!wf.jobRequirements && !!wf.gapReport),
 )
-const showOptimizeResult = computed(() => !!wf.diffReport)
+const showOptimizeResult = computed(() =>
+  stage.value === 'done' && Boolean(wf.diffReport?.sections?.length),
+)
 
 async function handleUpload(file) {
   const f = file?.raw !== undefined ? file.raw : file
@@ -78,6 +82,15 @@ onMounted(checkApi)
       <p class="health">后端状态: {{ healthStatus }}</p>
     </div>
     <el-card class="pipeline-card">
+      <el-alert
+        v-if="wf.error"
+        type="error"
+        title="任务执行失败"
+        :description="wf.error"
+        show-icon
+        :closable="false"
+        class="workflow-error"
+      />
       <div class="step">
         <div class="step-header">
           <el-tag type="primary" round>步骤 1</el-tag>
@@ -258,6 +271,7 @@ onMounted(checkApi)
 .hero p { color: #909399; margin: 4px 0; }
 .health { font-size: 13px; margin-top: 12px; }
 .pipeline-card { padding: 8px 16px; }
+.workflow-error { margin: 8px 0 18px; }
 
 .step { padding: 18px 0; border-bottom: 1px dashed #ebeef5; }
 .step:last-child { border-bottom: none; }
