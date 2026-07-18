@@ -39,6 +39,7 @@ class WorkflowState(TypedDict, total=False):
     resume_evaluation: dict[str, Any]
 
     # ===== Agent 2 产出 =====
+    jd_url: str  # 招聘职位详情页 URL
     jd_source_type: Literal["text", "url"]
     jd_raw_text: str
     job_requirements: dict[str, Any]
@@ -66,6 +67,7 @@ def initial_workflow_state(task_id: str, file_path: str) -> WorkflowState:
         "structured_resume": {},
         "resume_evaluation": {},
         # Agent 2
+        "jd_url": "",
         "jd_source_type": "text",
         "jd_raw_text": "",
         "job_requirements": {},
@@ -106,6 +108,7 @@ class WorkflowState(TypedDict, total=False):
     resume_evaluation: dict[str, Any]
 
     # Agent 2 output
+    jd_url: str  # Job detail page URL
     jd_source_type: Literal["text", "url"]
     jd_raw_text: str
     job_requirements: dict[str, Any]
@@ -131,6 +134,7 @@ def initial_workflow_state(task_id: str, file_path: str) -> WorkflowState:
         "raw_text": "",
         "structured_resume": {},
         "resume_evaluation": {},
+        "jd_url": "",
         "jd_source_type": "text",
         "jd_raw_text": "",
         "job_requirements": {},
