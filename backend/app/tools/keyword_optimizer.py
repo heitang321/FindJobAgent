@@ -1,4 +1,4 @@
-"""Tool 3.2 helpers merged into the section-rewriter workflow."""
+"""Tool 3.2 keyword helpers used by the section-rewriter workflow."""
 
 from __future__ import annotations
 

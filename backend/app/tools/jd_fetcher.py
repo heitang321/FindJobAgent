@@ -20,8 +20,6 @@
 """
 from __future__ import annotations
 
-from playwright.sync_api import sync_playwright
-
 from app.tools._browser import (
     CDP_ENDPOINT,
     cleanup_browser,
@@ -50,6 +48,13 @@ def fetch_jd_from_url(url: str, timeout: int = 15000, render_wait: int = 3000) -
         RuntimeError: Edge 启动失败
         Exception: 页面加载失败或超时
     """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "抓取 JD URL 需要安装 Playwright：pip install playwright"
+        ) from exc
+
     # 启动 Edge（如果 CDP 端口未就绪则自动启动，返回进程对象用于后续清理）
     proc = ensure_browser_running()
 
@@ -88,6 +93,6 @@ if __name__ == "__main__":
     if test_url:
         print(f"\n正在抓取: {test_url}")
         result = fetch_jd_from_url(test_url)
-        print(f"\n=== 页面文本（前 2000 字符）===")
+        print("\n=== 页面文本（前 2000 字符）===")
         print(result[:2000])
         print(f"\n=== 总字符数: {len(result)} ===")

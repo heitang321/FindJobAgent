@@ -1,4 +1,4 @@
-"""Tool 1.1: 简历文件类型检测器。
+"""Tool 1.1: 确定性简历文件类型检测器。
 
 纯函数，不调用 LLM。通过文件扩展名 + 文件头（magic bytes）双重判断，
 输出 {"file_type": "pdf"|"docx"|"doc"|"unknown", "file_path": str}。

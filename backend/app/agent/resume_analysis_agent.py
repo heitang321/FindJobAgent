@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 
-from app.schema.workflow_state import WorkflowState
+from app.schemas.workflow_state import WorkflowState
 from app.tools.document_text_extractor import document_text_extractor
 from app.tools.file_type_detector import file_type_detector
 from app.tools.pdf_to_word_converter import pdf_to_word_converter

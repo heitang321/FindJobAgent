@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.schema.workflow_state import WorkflowState
+from app.schemas.workflow_state import WorkflowState
 from app.tools.diff_generator import diff_generator
 from app.tools.doc_generator import generate_resume_document
 from app.tools.keyword_optimizer import added_job_keywords

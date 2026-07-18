@@ -1,4 +1,4 @@
-"""Tool 1.2: convert PDF resumes to a layout-preserving Word reference.
+"""Tool 1.2: convert PDF resumes into a layout-preserving Word reference.
 
 PDF text is not reconstructed into editable Word paragraphs because that can
 reorder content and destroy the original template. Each PDF page is rendered

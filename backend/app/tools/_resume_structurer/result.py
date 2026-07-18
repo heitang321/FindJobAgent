@@ -1,4 +1,4 @@
-"""Result templates and normalization for resume structuring."""
+"""Normalized result templates for the resume-structuring module."""
 
 from __future__ import annotations
 
