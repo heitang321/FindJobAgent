@@ -10,12 +10,12 @@ import sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ".")
 
-from app.ai.schema.workflow_state import initial_workflow_state
-from app.ai.agent.resume_analysis_agent import ResumeAnalysisAgent
+from app.schema.workflow_state import initial_workflow_state
+from app.agent.resume_analysis_agent import ResumeAnalysisAgent
 from app.tools.jd_extractor import extract_jd_text
 from app.tools.requirement_extractor import extract_requirements
 from app.tools.matcher import analyze_match, split_to_workflow_fields
-from app.ai.agent.resume_optimization_agent import run_resume_optimization_agent
+from app.agent.resume_optimization_agent import run_resume_optimization_agent
 
 # 预存的 JD 页面文本（之前测试成功抓取的）
 MOCK_JD_PAGE = """

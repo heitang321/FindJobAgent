@@ -14,7 +14,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.api.v1.router import api_router  # noqa: E402
-from app.ai.schema.workflow_state import initial_workflow_state  # noqa: E402
+from app.schema.workflow_state import initial_workflow_state  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.services.resume_tasks import resume_task_store  # noqa: E402
 

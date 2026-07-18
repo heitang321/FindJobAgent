@@ -14,10 +14,10 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from app.ai.agent.job_analysis_agent import JobAnalysisAgent
-from app.ai.agent.resume_analysis_agent import ResumeAnalysisAgent
-from app.ai.agent.resume_optimization_agent import ResumeOptimizationAgent
-from app.ai.schema.workflow_state import WorkflowState, initial_workflow_state
+from app.agent.job_analysis_agent import JobAnalysisAgent
+from app.agent.resume_analysis_agent import ResumeAnalysisAgent
+from app.agent.resume_optimization_agent import ResumeOptimizationAgent
+from app.schema.workflow_state import WorkflowState, initial_workflow_state
 
 
 # ===== LangGraph 节点函数 =====
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 3:
-        print("用法: python -m app.ai.workflow <简历文件路径> <JD URL>")
+        print("用法: python -m app.workflow <简历文件路径> <JD URL>")
         sys.exit(1)
 
     resume_path = sys.argv[1]

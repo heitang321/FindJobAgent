@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ai.tools._resume_structurer.fallback import fallback_structure
-from app.ai.tools._resume_structurer.llm import (
+from app.tools._resume_structurer.fallback import fallback_structure
+from app.tools._resume_structurer.llm import (
     LLMCallable,
     build_resume_structure_prompt,
     configured_llm,
     parse_llm_response,
 )
-from app.ai.tools._resume_structurer.result import normalize_result
+from app.tools._resume_structurer.result import normalize_result
 
 __all__ = ["LLMCallable", "build_resume_structure_prompt", "resume_structurer"]
 

@@ -22,8 +22,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.ai.agent.resume_analysis_agent import run_resume_analysis_agent  # noqa: E402
-from app.ai.schema.workflow_state import initial_workflow_state  # noqa: E402
+from app.agent.resume_analysis_agent import run_resume_analysis_agent  # noqa: E402
+from app.schema.workflow_state import initial_workflow_state  # noqa: E402
 
 
 def _ask_resume_path() -> Path:

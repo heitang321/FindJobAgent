@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.ai.tools._resume_structurer.result import empty_result
+from app.tools._resume_structurer.result import empty_result
 
 
 SECTION_NAMES: dict[str, str] = {

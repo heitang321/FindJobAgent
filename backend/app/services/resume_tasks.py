@@ -8,9 +8,9 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
-from app.ai.agent.resume_analysis_agent import run_resume_analysis_agent
-from app.ai.schema.workflow_state import WorkflowState, initial_workflow_state
-from app.ai.tools.file_type_detector import file_type_detector
+from app.agent.resume_analysis_agent import run_resume_analysis_agent
+from app.schema.workflow_state import WorkflowState, initial_workflow_state
+from app.tools.file_type_detector import file_type_detector
 from app.core.config import settings
 
 
