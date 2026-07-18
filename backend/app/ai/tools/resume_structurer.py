@@ -467,45 +467,28 @@ def resume_structurer(
     llm: LLMCallable | None = None,
     use_configured_llm: bool = False,
 ) -> dict[str, Any]:
-    """结构化提取简历文本并评估完整度。
+    """Return a normalized structured resume and evaluation.
 
-    这是 Agent 1 中唯一调用 LLM 的工具。接收原始简历文本，
-    输出结构化简历 + 评估报告的复合对象。
-
-    Parameters
-    ----------
-    raw_text:
-        从简历文件中提取的原始文本。
-    llm:
-        可选的 LLM callable。接收 prompt 字符串，返回 JSON 字符串或 dict。
-        如果为 None，使用确定性 fallback。
-
-    Returns
-    -------
-    dict[str, Any]
-        包含 ``structured_resume`` 和 ``evaluation`` 两个键的复合对象::
-
-            {
-              "structured_resume": { ... },
-              "evaluation": { ... }
-            }
+    An injected ``llm`` is used when supplied. Otherwise the configured model
+    is used only when ``use_configured_llm`` is true. Any unavailable model,
+    invalid response, or model error falls back to deterministic parsing while
+    preserving the error in ``evaluation.llm_error``.
     """
-    if llm is None:
-        if use_configured_llm:
-            try:
-                llm = _configured_llm
-            except Exception:
-                llm = None
-        if llm is None:
-            return _normalize_result(_fallback_structure(raw_text))
+    model = llm
+    if model is None and use_configured_llm:
+        model = configured_llm
 
-    prompt = build_resume_structure_prompt(raw_text)
+    if model is None:
+        return normalize_result(fallback_structure(raw_text))
+
     try:
-        response = llm(prompt)
-        result = _normalize_result(_parse_llm_response(response))
-        result["evaluation"]["analysis_source"] = result["evaluation"]["analysis_source"] or "llm"
+        response = model(build_resume_structure_prompt(raw_text))
+        result = normalize_result(parse_llm_response(response))
+        result["evaluation"]["analysis_source"] = (
+            result["evaluation"]["analysis_source"] or "llm"
+        )
         return result
     except Exception as exc:
-        result = _normalize_result(_fallback_structure(raw_text))
+        result = normalize_result(fallback_structure(raw_text))
         result["evaluation"]["llm_error"] = str(exc)
         return result
