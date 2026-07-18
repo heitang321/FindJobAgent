@@ -393,6 +393,39 @@ class TestResumeStructurer:
         result = resume_structurer("text", llm=fake_llm)
         assert result["evaluation"]["completeness_score"] == 100
 
+    def test_configured_llm_path_uses_model_adapter(self, monkeypatch):
+        """启用已配置模型时应调用模型适配器，而不是发生名称解析错误。"""
+
+        def fake_chat_completion(prompt: str, system_prompt: str = ""):
+            assert "姓名：赵六" in prompt
+            assert system_prompt
+            return {
+                "structured_resume": {
+                    "basic_info": {
+                        "name": "赵六",
+                        "phone": "",
+                        "email": "",
+                        "location": "",
+                    },
+                    "education": [],
+                    "work_experience": [],
+                    "project_experience": [],
+                    "skills": [],
+                    "self_evaluation": "",
+                },
+                "evaluation": {"analysis_source": "llm", "completeness_score": 20},
+            }
+
+        monkeypatch.setattr(
+            "app.ai.model.openai_compatible.chat_completion", fake_chat_completion
+        )
+
+        result = resume_structurer("姓名：赵六", use_configured_llm=True)
+
+        assert result["structured_resume"]["basic_info"]["name"] == "赵六"
+        assert result["evaluation"]["analysis_source"] == "llm"
+        assert result["evaluation"]["llm_error"] == ""
+
     def test_build_prompt_contains_schema(self):
         """build_resume_structure_prompt 包含 schema 定义和原文。"""
         prompt = build_resume_structure_prompt("测试原文")
