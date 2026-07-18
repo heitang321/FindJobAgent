@@ -5,7 +5,8 @@ import { ElMessage } from 'element-plus'
 const request = axios.create({
   // 通过 vite proxy 代理，开发环境直接用相对路径
   baseURL: '/api/v1',
-  timeout: 30000,
+  // Agent 2 同步执行（LLM × 2 + CDP 抓取）可能 60-90s，给到 3 分钟
+  timeout: 180000,
 })
 
 // 请求拦截器：自动携带 token

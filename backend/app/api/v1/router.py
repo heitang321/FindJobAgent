@@ -5,7 +5,7 @@ main.py 中只需挂载一次 v1_router 即可。
 """
 from fastapi import APIRouter
 
-from app.api.v1 import auth, health, optimize, resume
+from app.api.v1 import auth, health, job, optimize, resume
 
 api_router = APIRouter()
 
@@ -13,4 +13,5 @@ api_router = APIRouter()
 api_router.include_router(health.router, tags=["system"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(resume.router, prefix="/resume", tags=["resume"])
+api_router.include_router(job.router, prefix="/job", tags=["job"])
 api_router.include_router(optimize.router, prefix="/optimize", tags=["optimize"])
