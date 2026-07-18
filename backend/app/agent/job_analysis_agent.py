@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from app.ai.schema.workflow_state import WorkflowState
+from app.schemas.workflow_state import WorkflowState
 from app.tools.jd_extractor import extract_jd_text
 from app.tools.jd_fetcher import fetch_jd_from_url
 from app.tools.matcher import analyze_match, split_to_workflow_fields

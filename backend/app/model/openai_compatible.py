@@ -1,4 +1,4 @@
-"""OpenAI-compatible chat client used by AI tools."""
+"""Shared OpenAI-compatible chat client used by application tools."""
 from __future__ import annotations
 
 import httpx

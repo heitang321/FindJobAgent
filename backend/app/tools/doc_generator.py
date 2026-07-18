@@ -1,4 +1,4 @@
-"""Tool 3.3: generate an editable optimized resume DOCX."""
+"""Tool 3.3: generate Agent 3's editable optimized-resume DOCX."""
 
 from __future__ import annotations
 

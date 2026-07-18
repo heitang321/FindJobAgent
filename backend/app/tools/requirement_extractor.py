@@ -100,5 +100,5 @@ if __name__ == "__main__":
 
         print("\n=== 正在用 LLM 结构化 ===")
         result = extract_requirements(jd_text)
-        print(f"\n=== 结构化结果 ===")
+        print("\n=== 结构化结果 ===")
         print(result.model_dump_json(indent=2))

@@ -17,11 +17,11 @@ from __future__ import annotations
 from collections.abc import Callable
 
 
-from app.ai.schema.workflow_state import WorkflowState
-from app.ai.tools.document_text_extractor import document_text_extractor
-from app.ai.tools.file_type_detector import file_type_detector
-from app.ai.tools.pdf_to_word_converter import pdf_to_word_converter
-from app.ai.tools.resume_structurer import LLMCallable, resume_structurer
+from app.schemas.workflow_state import WorkflowState
+from app.tools.document_text_extractor import document_text_extractor
+from app.tools.file_type_detector import file_type_detector
+from app.tools.pdf_to_word_converter import pdf_to_word_converter
+from app.tools.resume_structurer import LLMCallable, resume_structurer
 
 # State 变更回调类型，services 层可用它异步写入数据库
 StateCallback = Callable[[WorkflowState], None]

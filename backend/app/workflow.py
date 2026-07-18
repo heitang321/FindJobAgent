@@ -1,7 +1,7 @@
 """LangGraph 工作流编排。
 
 将 Agent 1（简历分析）和 Agent 2（岗位分析）串联成线性 StateGraph。
-Agent 3（简历优化）尚未实现，预留节点位置。
+Agent 3（简历优化）由独立触发接口在岗位匹配完成后执行。
 
 图结构::
 
@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from app.ai.agent.job_analysis_agent import JobAnalysisAgent
-from app.ai.agent.resume_analysis_agent import ResumeAnalysisAgent
-from app.ai.schema.workflow_state import WorkflowState, initial_workflow_state
+from app.agent.job_analysis_agent import JobAnalysisAgent
+from app.agent.resume_analysis_agent import ResumeAnalysisAgent
+from app.schemas.workflow_state import WorkflowState, initial_workflow_state
 
 
 # ===== LangGraph 节点函数 =====
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 3:
-        print("用法: python -m app.ai.workflow <简历文件路径> <JD URL>")
+        print("用法: python -m app.workflow <简历文件路径> <JD URL>")
         sys.exit(1)
 
     resume_path = sys.argv[1]

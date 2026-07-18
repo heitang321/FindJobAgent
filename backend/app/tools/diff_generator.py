@@ -1,4 +1,4 @@
-"""Tool 3.4: build frontend-ready resume section comparisons."""
+"""Tool 3.4: build frontend-ready section comparisons for Agent 3."""
 
 from __future__ import annotations
 

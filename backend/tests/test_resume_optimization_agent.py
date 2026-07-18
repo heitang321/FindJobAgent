@@ -14,13 +14,13 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.ai.agent.resume_optimization_agent import (  # noqa: E402
+from app.agent.resume_optimization_agent import (  # noqa: E402
     run_resume_optimization_agent,
 )
-from app.ai.schema.workflow_state import initial_workflow_state  # noqa: E402
-from app.ai.tools.diff_generator import diff_generator  # noqa: E402
-from app.ai.tools.doc_generator import generate_resume_document  # noqa: E402
-from app.ai.tools.section_rewriter import section_rewriter  # noqa: E402
+from app.schemas.workflow_state import initial_workflow_state  # noqa: E402
+from app.tools.diff_generator import diff_generator  # noqa: E402
+from app.tools.doc_generator import generate_resume_document  # noqa: E402
+from app.tools.section_rewriter import section_rewriter  # noqa: E402
 from app.schemas.optimization import SectionRewriteRequest  # noqa: E402
 
 

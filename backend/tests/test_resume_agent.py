@@ -14,7 +14,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.ai.agent.resume_analysis_agent import (  # noqa: E402
+from app.agent.resume_analysis_agent import (  # noqa: E402
     ResumeAnalysisAgent,
     convert_pdf_node,
     detect_file_type_node,
@@ -22,11 +22,11 @@ from app.ai.agent.resume_analysis_agent import (  # noqa: E402
     run_resume_analysis_agent,
     structure_resume_node,
 )
-from app.ai.schema.workflow_state import initial_workflow_state  # noqa: E402
-from app.ai.tools.document_text_extractor import document_text_extractor  # noqa: E402
-from app.ai.tools.file_type_detector import file_type_detector  # noqa: E402
-from app.ai.tools.pdf_to_word_converter import pdf_to_word_converter  # noqa: E402
-from app.ai.tools.resume_structurer import (  # noqa: E402
+from app.schemas.workflow_state import initial_workflow_state  # noqa: E402
+from app.tools.document_text_extractor import document_text_extractor  # noqa: E402
+from app.tools.file_type_detector import file_type_detector  # noqa: E402
+from app.tools.pdf_to_word_converter import pdf_to_word_converter  # noqa: E402
+from app.tools.resume_structurer import (  # noqa: E402
     build_resume_structure_prompt,
     resume_structurer,
 )
@@ -446,7 +446,7 @@ class TestResumeStructurer:
             }
 
         monkeypatch.setattr(
-            "app.ai.model.openai_compatible.chat_completion", fake_chat_completion
+            "app.model.openai_compatible.chat_completion", fake_chat_completion
         )
 
         result = resume_structurer("姓名：赵六", use_configured_llm=True)
@@ -529,7 +529,7 @@ class TestResumeAnalysisAgentNodes:
             return {"raw_text": "原始 PDF 文本", "char_count": 9}
 
         monkeypatch.setattr(
-            "app.ai.agent.resume_analysis_agent.document_text_extractor",
+            "app.agent.resume_analysis_agent.document_text_extractor",
             fake_extractor,
         )
         state = initial_workflow_state("task-pdf", str(pdf_path))

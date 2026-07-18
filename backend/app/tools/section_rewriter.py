@@ -53,7 +53,7 @@ def _parse_response(response: str | dict[str, Any]) -> dict[str, Any]:
 
 
 def _configured_llm(prompt: str) -> str:
-    from app.ai.model.openai_compatible import chat_completion
+    from app.model.openai_compatible import chat_completion
 
     return chat_completion(prompt, system_prompt=_SYSTEM_PROMPT)
 

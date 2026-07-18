@@ -78,7 +78,7 @@ def parse_llm_response(response: str | dict[str, Any]) -> dict[str, Any]:
 
 def configured_llm(prompt: str) -> str:
     """Call the configured OpenAI-compatible model."""
-    from app.ai.model.openai_compatible import chat_completion
+    from app.model.openai_compatible import chat_completion
 
     return chat_completion(
         prompt,

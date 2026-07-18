@@ -1,4 +1,4 @@
-"""Tool 1.3: 文档文本提取器。
+"""Tool 1.3: 确定性文档文本提取器。
 
 确定性操作，不调用 LLM。docx 使用 python-docx，pdf 使用 PyMuPDF（fitz）。
 输出 {"raw_text": str, "char_count": int}。
@@ -69,52 +69,6 @@ def document_text_extractor(file_path: str) -> dict[str, object]:
         包含 ``raw_text``（提取的文本 str）和 ``char_count``（字符数 int）。
         对于不支持的文件类型，返回空文本。
     """
-    path = Path(file_path)
-    suffix = path.suffix.lower()
-
-    if suffix == ".docx":
-        raw_text = _extract_docx_text(path)
-    elif suffix == ".pdf":
-        raw_text = _extract_pdf_text(path)
-    else:
-        raw_text = ""
-
-    return {"raw_text": raw_text, "char_count": len(raw_text)}
-"""Tool 1.3: extract text from PDF or Word resumes."""
-from pathlib import Path
-
-
-def _extract_docx_text(path: Path) -> str:
-    from docx import Document
-
-    document = Document(str(path))
-    parts: list[str] = []
-    for paragraph in document.paragraphs:
-        text = paragraph.text.strip()
-        if text:
-            parts.append(text)
-    for table in document.tables:
-        for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-            if cells:
-                parts.append(" | ".join(cells))
-    return "\n".join(parts)
-
-
-def _extract_pdf_text(path: Path) -> str:
-    import fitz
-
-    parts: list[str] = []
-    with fitz.open(str(path)) as document:
-        for page in document:
-            text = page.get_text().strip()
-            if text:
-                parts.append(text)
-    return "\n".join(parts)
-
-
-def document_text_extractor(file_path: str) -> dict[str, object]:
-    """Extract raw text and character count from a supported document."""
     path = Path(file_path)
     suffix = path.suffix.lower()
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.ai.agent.resume_optimization_agent import run_resume_optimization_agent
-from app.ai.schema.workflow_state import WorkflowState
+from app.agent.resume_optimization_agent import run_resume_optimization_agent
+from app.schemas.workflow_state import WorkflowState
 from app.core.config import settings
 from app.services.resume_tasks import resume_task_store
 

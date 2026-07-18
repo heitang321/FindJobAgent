@@ -13,6 +13,7 @@ from app.schemas.optimization import (
     SectionRewriteRequest,
     SectionRewriteResult,
 )
+from app.schemas.workflow_state import WorkflowState, initial_workflow_state
 
 __all__ = [
     "DiffReport",
@@ -23,4 +24,6 @@ __all__ = [
     "SectionDiff",
     "SectionRewriteRequest",
     "SectionRewriteResult",
+    "WorkflowState",
+    "initial_workflow_state",
 ]
