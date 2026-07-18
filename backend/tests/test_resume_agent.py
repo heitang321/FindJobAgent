@@ -6,6 +6,7 @@ document_text_extractor / resume_structurer）以及 Agent 的线性执行流程
 """
 from pathlib import Path
 import sys
+import zipfile
 
 from docx import Document
 
@@ -134,6 +135,34 @@ class TestPdfToWordConverter:
         # 转换可能成功也可能失败（取决于 pdf2docx 是否安装及文件是否有效）
         # 但路径应该以 .docx 结尾
         assert result["converted_path"].endswith(".docx")
+
+    def test_pdf_pages_are_embedded_without_reflow(self, tmp_path):
+        """PDF 页面应以原始渲染像素嵌入 Word，不能重排文字或模板。"""
+        import fitz
+
+        pdf_path = tmp_path / "resume.pdf"
+        pdf = fitz.open()
+        for label in ("PAGE ONE", "PAGE TWO"):
+            page = pdf.new_page(width=595, height=842)
+            page.insert_text((72, 72), label, fontsize=18)
+        pdf.save(pdf_path)
+        pdf.close()
+
+        with fitz.open(pdf_path) as source:
+            expected_pages = [
+                page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).tobytes("png")
+                for page in source
+            ]
+
+        result = pdf_to_word_converter(str(pdf_path))
+
+        assert result["success"] is True
+        with zipfile.ZipFile(result["converted_path"]) as package:
+            image_names = sorted(
+                name for name in package.namelist() if name.startswith("word/media/")
+            )
+            embedded_pages = [package.read(name) for name in image_names]
+        assert embedded_pages == expected_pages
 
 
 # ========================================================================
@@ -486,6 +515,31 @@ class TestResumeAnalysisAgentNodes:
 
         assert "张三" in state["raw_text"]
         assert "13800138000" in state["raw_text"]
+
+    def test_extract_text_node_reads_original_pdf(self, tmp_path, monkeypatch):
+        """PDF 分析必须读取原文件，不能读取为了展示生成的图片版 Word。"""
+        pdf_path = tmp_path / "resume.pdf"
+        converted_path = tmp_path / "resume.docx"
+        pdf_path.write_bytes(b"%PDF-original")
+        converted_path.write_bytes(b"PK\x03\x04converted")
+        requested_paths = []
+
+        def fake_extractor(file_path: str):
+            requested_paths.append(file_path)
+            return {"raw_text": "原始 PDF 文本", "char_count": 9}
+
+        monkeypatch.setattr(
+            "app.ai.agent.resume_analysis_agent.document_text_extractor",
+            fake_extractor,
+        )
+        state = initial_workflow_state("task-pdf", str(pdf_path))
+        state["file_type"] = "pdf"
+        state["converted_file_path"] = str(converted_path)
+
+        extract_text_node(state)
+
+        assert requested_paths == [str(pdf_path)]
+        assert state["raw_text"] == "原始 PDF 文本"
 
     def test_structure_resume_node(self):
         """structure_resume_node 写入 structured_resume 和 resume_evaluation。"""

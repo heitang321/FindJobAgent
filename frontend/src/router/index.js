@@ -17,6 +17,12 @@ const routes = [
         component: () => import('@/views/Login.vue'),
         meta: { title: '登录' },
       },
+      {
+        path: 'optimize/:taskId',
+        name: 'OptimizationResult',
+        component: () => import('@/views/OptimizationResult.vue'),
+        meta: { title: '简历优化结果' },
+      },
     ],
   },
 ]

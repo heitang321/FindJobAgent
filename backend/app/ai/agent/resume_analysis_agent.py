@@ -60,9 +60,13 @@ def convert_pdf_node(state: WorkflowState) -> WorkflowState:
 def extract_text_node(state: WorkflowState) -> WorkflowState:
     """Tool 1.3: 提取文本，写入 state["raw_text"]。
 
-    优先使用转换后的路径（PDF→DOCX），否则使用原始路径。
+    PDF 必须直接读取原文件，避免保真 Word 中的页面图片无法提取文本，
+    也避免可编辑格式转换造成的文本重排。DOCX 使用原始/转换后的 Word。
     """
-    extract_path = state.get("converted_file_path") or state["file_path"]
+    if state.get("file_type") == "pdf":
+        extract_path = state["file_path"]
+    else:
+        extract_path = state.get("converted_file_path") or state["file_path"]
     result = document_text_extractor(extract_path)
     state["raw_text"] = str(result["raw_text"])
     return state
