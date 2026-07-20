@@ -1,4 +1,4 @@
-"""Tool 3.4: build frontend-ready section comparisons for Agent 3."""
+"""Tool 3.4：为 Agent 3 生成前端可直接渲染的段落对比。"""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def diff_generator(
     optimized_resume: dict[str, Any],
     rewrite_results: list[SectionRewriteResult] | None = None,
 ) -> DiffReport:
-    """Compare every section occurrence and attach rewrite explanations."""
+    """对比每个段落实例，并附加改写说明。"""
     original = {
         (kind, index): text for kind, index, text in _flatten_resume(original_resume)
     }

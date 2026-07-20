@@ -1,4 +1,4 @@
-"""Deterministic resume parsing used when no LLM result is available."""
+"""未获得 LLM 结果时使用的确定性简历解析。"""
 
 from __future__ import annotations
 
@@ -217,7 +217,7 @@ def _extract_self_evaluation(raw_text: str) -> str:
 
 
 def fallback_structure(raw_text: str) -> dict[str, Any]:
-    """Build a basic structured result without a model call."""
+    """不调用模型，构建基础结构化结果。"""
     result = empty_result()
     resume = result["structured_resume"]
     evaluation = result["evaluation"]

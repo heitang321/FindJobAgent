@@ -1,4 +1,4 @@
-"""Agent 3 tools and orchestration tests."""
+"""Agent 3 工具与编排测试。"""
 
 from __future__ import annotations
 

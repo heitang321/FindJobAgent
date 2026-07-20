@@ -1,4 +1,4 @@
-"""Agent 3 optimization trigger, result, and download endpoints."""
+"""Agent 3 优化触发、结果查询和下载接口。"""
 
 from __future__ import annotations
 

@@ -1,14 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getUserInfo } from '@/api'
+import { getUserInfo, loginWithEmail, registerWithEmail } from '@/api'
 
 export const useUserStore = defineStore('user', () => {
   // 用户信息
   const userInfo = ref(null)
-  // token
+  // 登录令牌
   const token = ref(localStorage.getItem('token') || '')
 
-  // 设置 token
+  // 设置登录令牌
   function setToken(newToken) {
     token.value = newToken
     if (newToken) {
@@ -32,6 +32,20 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  async function login(payload) {
+    const data = await loginWithEmail(payload)
+    setToken(data.access_token)
+    userInfo.value = data.user
+    return data
+  }
+
+  async function register(payload) {
+    const data = await registerWithEmail(payload)
+    setToken(data.access_token)
+    userInfo.value = data.user
+    return data
+  }
+
   // 登出
   function logout() {
     setToken('')
@@ -43,6 +57,8 @@ export const useUserStore = defineStore('user', () => {
     token,
     setToken,
     fetchUserInfo,
+    login,
+    register,
     logout,
   }
 })

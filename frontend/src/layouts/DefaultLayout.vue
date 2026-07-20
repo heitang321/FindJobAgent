@@ -1,7 +1,14 @@
 <script setup>
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
+const router = useRouter()
+
+function handleLogout() {
+  userStore.logout()
+  router.replace('/login')
+}
 </script>
 
 <template>
@@ -11,7 +18,7 @@ const userStore = useUserStore()
       <div class="header-right">
         <template v-if="userStore.token">
           <span class="username">{{ userStore.userInfo?.username || '用户' }}</span>
-          <el-button type="text" @click="userStore.logout()">退出</el-button>
+          <el-button type="text" @click="handleLogout">退出</el-button>
         </template>
         <template v-else>
           <el-button type="primary" @click="$router.push('/login')">登录</el-button>

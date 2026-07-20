@@ -1,4 +1,4 @@
-"""Tool 3.3: generate Agent 3's editable optimized-resume DOCX."""
+"""Tool 3.3：生成 Agent 3 的可编辑优化简历 DOCX。"""
 
 from __future__ import annotations
 
@@ -168,7 +168,7 @@ def generate_resume_document(
     pdf_text_edits: Iterable[PdfTextEdit] = (),
     missing_skills_text: str = "",
 ) -> str:
-    """Generate an editable Word resume and return its absolute path.
+    """生成可编辑的 Word 简历，并返回其绝对路径。
 
     When a source document is supplied, edit verified text slots in a copy of
     that DOCX. The source's layout and every package part except the body XML

@@ -1,4 +1,4 @@
-"""Normalized result templates for the resume-structuring module."""
+"""简历结构化模块使用的规范化结果模板。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ EMPTY_STRUCTURED_RESUME: dict[str, Any] = {
 
 
 def empty_result() -> dict[str, Any]:
-    """Return a fresh result with every documented field present."""
+    """返回包含所有约定字段的全新结果。"""
     return {
         "structured_resume": deepcopy(EMPTY_STRUCTURED_RESUME),
         "evaluation": {
@@ -43,7 +43,7 @@ def empty_result() -> dict[str, Any]:
 
 
 def normalize_result(data: dict[str, Any]) -> dict[str, Any]:
-    """Normalize untrusted LLM or fallback data to the public result shape."""
+    """将不可信的 LLM 或兜底数据规范化为公开结果结构。"""
     result = empty_result()
     structured = data.get("structured_resume") or {}
     evaluation = data.get("evaluation") or {}

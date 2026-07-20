@@ -1,4 +1,4 @@
-"""Resume analysis endpoints for Agent 1."""
+"""Agent 1 简历分析接口。"""
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
 from app.services.resume_tasks import analyze_resume_task, resume_task_store, save_uploaded_resume

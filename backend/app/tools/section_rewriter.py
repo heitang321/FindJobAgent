@@ -1,4 +1,4 @@
-"""Tool 3.1: rewrite one resume section with grounded LLM output."""
+"""Tool 3.1：基于事实约束的 LLM 输出改写单个简历段落。"""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ _SECTION_GUIDANCE = {
 
 
 def build_section_rewrite_prompt(request: SectionRewriteRequest) -> str:
-    """Build a self-contained prompt for one independently rewritable section."""
+    """为一个可独立改写的段落构建自包含提示词。"""
     payload = request.model_dump()
     guidance = _SECTION_GUIDANCE[request.section_type]
     if request.original_content:
@@ -114,10 +114,10 @@ def section_rewriter(
     llm: RewriteLLM | None = None,
     use_configured_llm: bool = True,
 ) -> SectionRewriteResult:
-    """Rewrite one section and validate the structured result.
+    """改写单个段落，并校验结构化结果。
 
-    ``llm`` is the true external seam: tests inject an in-memory adapter while
-    production uses the configured OpenAI-compatible adapter.
+    ``llm`` 是真正的外部依赖边界：测试注入内存适配器，
+    生产环境使用已配置的 OpenAI 兼容适配器。
     """
     model = llm
     if model is None and use_configured_llm:
