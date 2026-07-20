@@ -6,6 +6,16 @@ export const checkHealth = () => request.get('/health')
 /** 获取当前用户信息 */
 export const getUserInfo = () => request.get('/auth/me')
 
+/** 发送登录 / 注册邮箱验证码 */
+export const sendAuthCode = (email, purpose) =>
+  request.post('/auth/send-code', { email, purpose })
+
+/** 邮箱验证码注册 */
+export const registerWithEmail = (payload) => request.post('/auth/register', payload)
+
+/** 邮箱验证码登录 */
+export const loginWithEmail = (payload) => request.post('/auth/login', payload)
+
 /** 上传简历并启动 Agent 1 分析（异步后台执行） */
 export const uploadResume = (file) => {
   const form = new FormData()
@@ -19,14 +29,14 @@ export const uploadResume = (file) => {
 export const getResumeAnalysis = (taskId) =>
   request.get(`/resume/${taskId}/analysis`)
 
-/** 提交 JD URL 同步执行 Agent 2（fetch JD → 结构化 → 匹配 → gap） */
+/** 提交 JD URL，同步执行 Agent 2（抓取 JD → 结构化 → 匹配 → 差距分析） */
 export const submitJdUrl = (taskId, jdUrl) =>
   request.post(`/job/${taskId}/analyze`, { jd_url: jdUrl })
 
 /** 触发 Agent 3 简历优化 */
 export const triggerOptimization = (taskId) => request.post(`/optimize/${taskId}`)
 
-/** 获取优化结果、逐段 diff 和优化摘要 */
+/** 获取优化结果、逐段对比和优化摘要 */
 export const getOptimizationResult = (taskId) =>
   request.get(`/optimize/${taskId}/result`)
 

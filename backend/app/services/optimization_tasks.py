@@ -1,4 +1,4 @@
-"""Task orchestration for Agent 3 resume optimization."""
+"""Agent 3 简历优化任务编排。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from app.services.resume_tasks import resume_task_store
 
 
 def prepare_optimization_task(task_id: str) -> WorkflowState:
-    """Validate prerequisites and mark a task ready for background execution."""
+    """校验前置条件，并将任务标记为可后台执行。"""
     state = resume_task_store.get(task_id)
     if state is None:
         raise KeyError(task_id)
@@ -29,7 +29,7 @@ def prepare_optimization_task(task_id: str) -> WorkflowState:
 
 
 def optimize_resume_task(task_id: str) -> WorkflowState:
-    """Run Agent 3 and persist every published state transition."""
+    """运行 Agent 3，并持久化每一次对外发布的状态变化。"""
     state = resume_task_store.get(task_id)
     if state is None:
         raise KeyError(task_id)

@@ -1,4 +1,4 @@
-"""Agent 3: parallel, section-level resume optimization."""
+"""Agent 3：并行的逐段简历优化。"""
 
 from __future__ import annotations
 
@@ -212,7 +212,7 @@ def _section_tasks(
 
 
 def _resume_evidence_context(structured_resume: dict[str, Any]) -> str:
-    """Return only resume-owned facts that can support skill extraction."""
+    """仅返回简历中可支撑技能提取的候选事实。"""
     evidence = {
         "work_experience": structured_resume.get("work_experience") or [],
         "project_experience": structured_resume.get("project_experience") or [],
@@ -441,7 +441,7 @@ def _optimization_summary(
 
 
 class ResumeOptimizationAgent:
-    """Deep module that owns the complete Agent 3 optimization workflow."""
+    """封装完整 Agent 3 优化流程的深模块。"""
 
     def __init__(
         self,
@@ -544,7 +544,7 @@ def run_resume_optimization_agent(
     output_dir: str | None = None,
     template_path: str | None = None,
 ) -> WorkflowState:
-    """Run Agent 3 through its single public interface."""
+    """通过单一公开入口运行 Agent 3。"""
     return ResumeOptimizationAgent(
         llm=llm,
         on_state_update=on_state_update,

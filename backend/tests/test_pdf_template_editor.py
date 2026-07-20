@@ -1,4 +1,4 @@
-"""PDF layout-preserving editing tests for Agent 3."""
+"""Agent 3 保留 PDF 版式的编辑测试。"""
 
 from __future__ import annotations
 

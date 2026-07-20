@@ -1,8 +1,7 @@
-"""Layout-preserving DOCX text-slot extraction and editing.
+"""保留版式的 DOCX 文本槽提取与编辑。
 
-Only ``word/document.xml`` is rewritten. All styles, relationships, media,
-headers, footers, settings, and document properties are copied byte-for-byte
-from the user's source document.
+只重写 ``word/document.xml``。样式、关系、媒体、页眉、页脚、设置和文档属性
+都会从用户源文档逐字节复制，避免破坏原始模板。
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ _DOCUMENT_PART = "word/document.xml"
 
 @dataclass(frozen=True)
 class ResumeTextSlot:
-    """One source paragraph that may be rewritten without rebuilding layout."""
+    """一个可在不重建版式的前提下改写的源段落。"""
 
     section_type: SectionType
     section_index: int
@@ -37,7 +36,7 @@ class ResumeTextSlot:
 
 @dataclass(frozen=True)
 class DocumentTextEdit:
-    """Verified in-place replacement for one source paragraph."""
+    """一个已校验的源段落原位替换。"""
 
     paragraph_index: int
     original_text: str
@@ -147,7 +146,7 @@ def extract_resume_text_slots(
     source_document_path: str | Path,
     targets: set[SectionType],
 ) -> list[ResumeTextSlot]:
-    """Locate editable resume paragraphs inside the requested semantic sections."""
+    """在指定语义段落内定位可编辑的简历段落。"""
     path = Path(source_document_path).resolve()
     if path.suffix.casefold() != ".docx" or not path.is_file():
         return []
@@ -312,7 +311,7 @@ def apply_resume_text_edits(
     *,
     missing_skills_text: str = "",
 ) -> str:
-    """Copy a source DOCX and change only verified body text slots."""
+    """复制源 DOCX，并且只修改已校验的正文文本槽。"""
     source = Path(source_document_path).resolve()
     destination = Path(output_path).resolve()
     if source == destination:

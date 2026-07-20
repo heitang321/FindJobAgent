@@ -1,30 +1,40 @@
-"""FastAPI 公共依赖。
-
-认证相关依赖在此定义，后续接入 JWT 后只需实现 get_current_user。
-"""
+"""FastAPI 公共依赖。"""
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.services.auth_service import AuthError, user_from_token
 
 # 数据库会话依赖，路由参数中用 db: DBSession 即可注入
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
 
-async def get_current_user() -> dict:
-    """获取当前登录用户（预留）。
+# Bearer 令牌解析器；auto_error=False 表示缺少令牌时由我们返回自定义错误信息
+bearer_scheme = HTTPBearer(auto_error=False)
 
-    后续接入 JWT 后实现逻辑：
-    1. 从请求头 Authorization: Bearer <token> 解析 token
-    2. 用 SECRET_KEY 解码，校验签名和过期时间
-    3. 查询数据库返回用户对象
 
-    目前返回占位用户，方便其他接口先开发。
-    """
-    # TODO: 接入 JWT 认证后替换为真实逻辑
-    return {"id": 0, "username": "guest"}
+async def get_current_user(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ],
+) -> dict:
+    """从 Authorization: Bearer <令牌> 中解析当前登录用户。"""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="未登录或令牌缺失",
+        )
+    try:
+        user = user_from_token(credentials.credentials)
+    except AuthError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="登录状态已失效，请重新登录",
+        ) from None
+    return user.public_dict()
 
 
 # 当前用户依赖，路由参数中用 user: CurrentUser 注入

@@ -1,4 +1,4 @@
-"""In-memory task service for Agent 1 resume analysis."""
+"""Agent 1 简历分析使用的内存任务服务。"""
 from __future__ import annotations
 
 import shutil
@@ -15,10 +15,10 @@ from app.core.config import settings
 
 
 class ResumeTaskStore:
-    """Small process-local store.
+    """轻量级进程内任务存储。
 
-    This can be swapped for a database-backed task table without changing the
-    API surface. The WorkflowState shape is already compatible with that.
+    后续可以替换为数据库任务表，而不需要改变 API 表面。
+    WorkflowState 的结构已经与这种替换方式兼容。
     """
 
     def __init__(self):
@@ -27,7 +27,7 @@ class ResumeTaskStore:
 
     def set(self, task_id: str, state: WorkflowState) -> None:
         with self._lock:
-            self._tasks[task_id] = dict(state)  # shallow copy is enough for state replacement
+            self._tasks[task_id] = dict(state)  # 状态替换只需要浅拷贝
 
     def get(self, task_id: str) -> WorkflowState | None:
         with self._lock:

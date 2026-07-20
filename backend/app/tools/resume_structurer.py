@@ -1,8 +1,7 @@
-"""Tool 1.4: structure and evaluate extracted resume text.
+"""Tool 1.4：结构化并评估已提取的简历文本。
 
-This module is the public seam for resume structuring. Prompt construction,
-deterministic parsing, result normalization, and the configured-model adapter
-live in private implementation modules so callers only need one small interface.
+本模块是简历结构化的公开边界。提示词构建、确定性解析、结果规范化和已配置模型适配器
+都放在私有实现模块中，使调用方只需要使用一个小而清晰的接口。
 """
 
 from __future__ import annotations
@@ -26,8 +25,9 @@ async def resume_structurer(
     llm: LLMCallable | None = None,
     use_configured_llm: bool = False,
 ) -> dict[str, Any]:
-    """Return a normalized structured resume and evaluation.
+    """返回规范化后的结构化简历和评估结果。
 
+<<<<<<< HEAD
     An injected ``llm`` is used when supplied. Otherwise the configured model
     is used only when ``use_configured_llm`` is true. Any unavailable model,
     invalid response, or model error falls back to deterministic parsing while
@@ -35,6 +35,11 @@ async def resume_structurer(
 
     重构后是 async：因为 configured_llm 改成 `await MyModel.get_model().ainvoke()`，
     注入的 LLMCallable 也是 async callable（见 _resume_structurer/llm.py）。
+=======
+    如果传入 ``llm``，则优先使用它。否则只有当 ``use_configured_llm`` 为 true 时
+    才使用已配置模型。模型不可用、响应无效或模型报错时，会回退到确定性解析，
+    同时将错误保存在 ``evaluation.llm_error`` 中。
+>>>>>>> 18ba918438e3c2c0c02e976d94446dd40b48493d
     """
     model = llm
     if model is None and use_configured_llm:
