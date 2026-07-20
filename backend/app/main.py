@@ -11,9 +11,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.database import engine
+from app.models import Base
 
 
 @asynccontextmanager
@@ -28,6 +31,11 @@ async def lifespan(app: FastAPI):
     """
     # ===== startup =====
     print(f"[{settings.APP_NAME}] 启动中...")
+    # 建表（如果表不存在）
+    Base.metadata.create_all(bind=engine)
+    # 自动迁移：补齐已有表中缺失的 updated_at 列
+    _ensure_updated_at_columns()
+    print(f"[{settings.APP_NAME}] 数据库表已就绪")
     yield
     # ===== shutdown =====
     print(f"[{settings.APP_NAME}] 正在关闭...")
@@ -54,6 +62,32 @@ app.add_middleware(
 # ===== 路由注册 =====
 # 所有 v1 接口统一挂在 /api/v1 前缀下
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+
+def _ensure_updated_at_columns() -> None:
+    """检查已有表是否缺少 updated_at 列，若缺少则自动 ALTER TABLE 补齐。
+
+    用户通过 job_agent.sql 建表时，部分表可能只有 created_at 而无 updated_at。
+    Base.metadata.create_all 不会修改已存在的表，因此需要手动迁移。
+    """
+    inspector = inspect(engine)
+    # 所有继承 Base 的表名
+    target_tables = {t for t in Base.metadata.tables}
+    for table_name in target_tables:
+        if table_name not in inspector.get_table_names():
+            continue
+        columns = {c["name"] for c in inspector.get_columns(table_name)}
+        if "updated_at" not in columns:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        f"ALTER TABLE `{table_name}` "
+                        f"ADD COLUMN `updated_at` DATETIME "
+                        f"DEFAULT CURRENT_TIMESTAMP "
+                        f"ON UPDATE CURRENT_TIMESTAMP"
+                    )
+                )
+            print(f"  [迁移] 已为表 `{table_name}` 添加 `updated_at` 列")
 
 
 @app.get("/", tags=["root"])
