@@ -13,6 +13,12 @@ const routes = [
         meta: { title: '首页', requiresAuth: true },
       },
       {
+        path: 'history',
+        name: 'History',
+        component: () => import('@/views/History.vue'),
+        meta: { title: '历史记录', requiresAuth: true },
+      },
+      {
         path: 'login',
         name: 'Login',
         component: () => import('@/views/Login.vue'),
