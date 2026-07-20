@@ -23,7 +23,7 @@ from app.agent.resume_analysis_agent import (  # noqa: E402
     run_resume_analysis_agent,
     structure_resume_node,
 )
-from app.schema.workflow_state import initial_workflow_state  # noqa: E402
+from app.schemas.workflow_state import initial_workflow_state  # noqa: E402
 from app.tools.document_text_extractor import document_text_extractor  # noqa: E402
 from app.tools.file_type_detector import file_type_detector  # noqa: E402
 from app.tools.pdf_to_word_converter import pdf_to_word_converter  # noqa: E402

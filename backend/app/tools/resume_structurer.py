@@ -21,7 +21,7 @@ from app.tools._resume_structurer.result import normalize_result
 __all__ = ["LLMCallable", "build_resume_structure_prompt", "resume_structurer"]
 
 
-def resume_structurer(
+async def resume_structurer(
     raw_text: str,
     llm: LLMCallable | None = None,
     use_configured_llm: bool = False,
@@ -32,6 +32,9 @@ def resume_structurer(
     is used only when ``use_configured_llm`` is true. Any unavailable model,
     invalid response, or model error falls back to deterministic parsing while
     preserving the error in ``evaluation.llm_error``.
+
+    重构后是 async：因为 configured_llm 改成 `await MyModel.get_model().ainvoke()`，
+    注入的 LLMCallable 也是 async callable（见 _resume_structurer/llm.py）。
     """
     model = llm
     if model is None and use_configured_llm:
@@ -41,7 +44,7 @@ def resume_structurer(
         return normalize_result(fallback_structure(raw_text))
 
     try:
-        response = model(build_resume_structure_prompt(raw_text))
+        response = await model(build_resume_structure_prompt(raw_text))
         result = normalize_result(parse_llm_response(response))
         result["evaluation"]["analysis_source"] = (
             result["evaluation"]["analysis_source"] or "llm"

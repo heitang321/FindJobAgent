@@ -9,7 +9,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.agent.resume_analysis_agent import run_resume_analysis_agent
-from app.schema.workflow_state import WorkflowState, initial_workflow_state
+from app.schemas.workflow_state import WorkflowState, initial_workflow_state
 from app.tools.file_type_detector import file_type_detector
 from app.core.config import settings
 
@@ -61,11 +61,16 @@ def save_uploaded_resume(file: UploadFile) -> WorkflowState:
     return state
 
 
-def analyze_resume_task(task_id: str) -> WorkflowState:
+async def analyze_resume_task(task_id: str) -> WorkflowState:
+    """运行 Agent 1 并把每次 state 变更回写到 store。
+
+    重构后是 async：resume_structurer 内部走 ChatOpenAI.ainvoke()，
+    BackgroundTasks.add_task 原生支持 async 函数（FastAPI 自动放进 event loop）。
+    """
     state = resume_task_store.get(task_id)
     if state is None:
         raise KeyError(task_id)
-    return run_resume_analysis_agent(
+    return await run_resume_analysis_agent(
         state,
         on_state_update=resume_task_store.update,
         use_configured_llm=settings.AI_ANALYSIS_ENABLED,

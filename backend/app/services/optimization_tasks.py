@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.agent.resume_optimization_agent import run_resume_optimization_agent
-from app.schema.workflow_state import WorkflowState
+from app.schemas.workflow_state import WorkflowState
 from app.core.config import settings
 from app.services.resume_tasks import resume_task_store
 

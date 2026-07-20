@@ -54,11 +54,14 @@ _SYSTEM_PROMPT = """你是一个职位描述分析专家。
 _HUMAN_TEMPLATE = "请从以下 JD 文本中提取结构化信息：\n\n{jd_text}"
 
 
-def extract_requirements(jd_text: str) -> JobRequirement:
+async def extract_requirements(jd_text: str) -> JobRequirement:
     """用 LLM 从 JD 文本中提取结构化职位需求。
 
     使用 LangChain 的 with_structured_output，通过 function calling
     让 LLM 返回符合 JobRequirement schema 的结构化数据。
+
+    重构后是 async：chain.ainvoke 是 LangChain 原生 async 接口，
+    配合 LangGraph 的 async 节点和 asyncio.gather 并发使用。
 
     Args:
         jd_text: jd_extractor.extract_jd_text() 返回的 JD 正文
@@ -81,24 +84,29 @@ def extract_requirements(jd_text: str) -> JobRequirement:
     # 构建 chain: prompt -> structured_model
     chain = prompt | structured_model
 
-    result = chain.invoke({"jd_text": jd_text})
+    result = await chain.ainvoke({"jd_text": jd_text})
     return result
 
 
-if __name__ == "__main__":
-    # 测试入口：抓取 URL → 提取 JD 正文 → LLM 结构化
+async def main() -> None:
+    """测试入口：抓取 URL → 提取 JD 正文 → LLM 结构化"""
     from app.tools.jd_fetcher import fetch_jd_from_url
     from app.tools.jd_extractor import extract_jd_text
 
     test_url = input("请输入招聘职位 URL: ").strip()
     if test_url:
         print(f"\n正在抓取: {test_url}")
-        page_text = fetch_jd_from_url(test_url)
+        page_text = await fetch_jd_from_url(test_url)
         jd_text = extract_jd_text(page_text)
         print(f"\n=== JD 正文 ({len(jd_text)} 字符) ===")
         print(jd_text)
 
         print("\n=== 正在用 LLM 结构化 ===")
-        result = extract_requirements(jd_text)
+        result = await extract_requirements(jd_text)
         print("\n=== 结构化结果 ===")
         print(result.model_dump_json(indent=2))
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
