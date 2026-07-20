@@ -114,9 +114,9 @@ onMounted(checkApi)
         <div v-if="stage === 'uploading'" class="loading-hint">
           <el-icon class="is-loading"><Loading /></el-icon> 正在上传...
         </div>
-        <div v-if="stage === 'analyzing'" class="loading-hint">
+        <div v-if="stage === 'job_input' && !wf.structuredResume" class="loading-hint">
           <el-icon class="is-loading"><Loading /></el-icon>
-          Agent 1 正在结构化简历（约 10-20s）...
+          Agent 1 正在后台结构化简历（约 10-20s），你可以同时输入 JD URL ↓
         </div>
       </div>
 

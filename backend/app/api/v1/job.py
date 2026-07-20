@@ -1,18 +1,23 @@
-"""Agent 2 job analysis endpoint.
+"""Job analysis endpoint with parallel orchestration.
 
-前端提交 JD URL 后，同步执行 Agent 2（fetch JD → extract → structure → match）。
-跑完写入 state 后返回 job_requirements、match_result、gap_report。
+前端提交 JD URL 后，编排函数并行启动 Agent 1（结构化简历）和 Agent 2 的
+前 3 步（抓 JD + 提取正文 + 结构化 JD），等两者完成后串行跑 Tool 2.4
+（matcher）。临界路径从 A1+A2前缀+matcher 变成 max(A1, A2前缀)+matcher，
+省 8-15s。
 
-由于 Agent 2 含 2 次 LLM 调用（结构化 JD + 匹配分析）和一次 CDP 抓取，
-整体耗时约 30-60s，前端 axios timeout 需调长（>= 120s）。
+若 state.structured_resume 已存在（用户已轮询过 A1 完成再提交 JD），
+编排函数自动跳过 A1 只跑 A2 全流程，向后兼容旧前端流程。
+
+含 2 次 LLM 调用 + 1 次 CDP 抓取，整体耗时约 20-45s（优化前 30-60s），
+前端 axios timeout 仍需 >= 120s。
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.agent.job_analysis_agent import run_job_analysis_agent
 from app.schemas.job import JobAnalysisRequest, JobAnalysisResponse
 from app.services.resume_tasks import resume_task_store
+from app.services.workflow_orchestrator import run_parallel_until_match
 
 router = APIRouter()
 
@@ -27,29 +32,28 @@ def _task_or_404(task_id: str) -> dict:
 @router.post(
     "/{task_id}/analyze",
     response_model=JobAnalysisResponse,
-    summary="提交 JD URL 同步执行岗位分析（Agent 2）",
+    summary="提交 JD URL 并行执行 A1 与 A2 前 3 步，最后串行跑 matcher",
 )
 def analyze_job(task_id: str, payload: JobAnalysisRequest) -> JobAnalysisResponse:
     """同步路由函数（非 async）：FastAPI 会自动放到线程池运行，
-    避开 asyncio 事件循环与 Playwright sync API 的冲突。"""
+    避开 asyncio 事件循环与 Playwright sync API 的冲突。
+
+    内部调 run_parallel_until_match：
+    - 若 state.structured_resume 已有：跳过 A1，只跑 A2 全流程（4 步）
+    - 若 state.structured_resume 为空：并行跑 A1 和 A2 前 3 步，
+      两者完成后串行跑 A2.4
+    """
     state = _task_or_404(task_id)
 
-    # 前置条件：Agent 1 必须已产出 structured_resume
-    if not state.get("structured_resume"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Resume analysis must finish before job analysis.",
-        )
-
-    # 同步执行 Agent 2，错误按严格快速失败策略直接 500
+    # 不再做"必须 A1 已完成"的前置检查 —— 编排函数会按需启动 A1
     try:
-        updated = run_job_analysis_agent(
+        updated = run_parallel_until_match(
             state,
             jd_url=payload.jd_url,
             on_state_update=resume_task_store.update,
         )
     except Exception as exc:
-        # run_job_analysis_agent 内部已 try/except 写 error，这里兜底未捕获异常
+        # 编排函数内部已 try/except 写 error，这里兜底未捕获异常
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Job analysis failed: {exc}",

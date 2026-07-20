@@ -87,7 +87,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     try {
       const data = await uploadResume(file)
       taskId.value = data.task_id
-      stage.value = 'analyzing'
+      // 关键优化：立即进入 job_input 阶段，让用户可以输入 JD URL
+      // 不再等 A1 完成 —— 后端编排函数会并行跑 A1 和 A2 前 3 步
+      stage.value = 'job_input'
       startResumePolling()
       return data
     } catch (e) {
@@ -106,25 +108,33 @@ export const useWorkflowStore = defineStore('workflow', () => {
           structuredResume.value = data.structured_resume
           resumeEvaluation.value = data.evaluation || null
         }
+        // A1 完成或失败时停止轮询，但不再重置 stage —— 用户可能已经
+        // 在 job_input 或 job_analyzing 阶段，stage 流转完全由用户操作控制
         if (data.current_stage === 'done' || data.current_stage === 'error') {
           if (resumePollTimer) {
             window.clearInterval(resumePollTimer)
             resumePollTimer = null
           }
           if (data.error) {
-            stage.value = 'error'
-            error.value = data.error
-          } else if (data.structured_resume) {
-            stage.value = 'job_input'
+            // A1 失败：仅在用户还没提交 JD 时才标 error
+            // 如果用户已经提交 JD（stage=job_analyzing），编排函数会处理
+            if (stage.value === 'job_input') {
+              stage.value = 'error'
+              error.value = data.error
+            }
           }
+          // 成功完成：structuredResume 已更新，stage 保持现状
         }
       } catch (e) {
         if (resumePollTimer) {
           window.clearInterval(resumePollTimer)
           resumePollTimer = null
         }
-        stage.value = 'error'
-        error.value = e.response?.data?.detail || e.message || '轮询简历分析失败'
+        // 轮询本身失败（非业务错误）仅在用户还没提交 JD 时标 error
+        if (stage.value === 'job_input') {
+          stage.value = 'error'
+          error.value = e.response?.data?.detail || e.message || '轮询简历分析失败'
+        }
       }
     }, 1500)
   }

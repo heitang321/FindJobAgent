@@ -152,6 +152,74 @@ class JobAnalysisAgent:
             self._publish(state)
             return state
 
+    def prepare_jd(self, state: WorkflowState, jd_url: str) -> WorkflowState:
+        """只跑 Tool 2.1+2.2+2.3：抓 JD → 提取正文 → LLM 结构化 JD。
+
+        这三步完全不依赖 Agent 1 的 structured_resume，只依赖 jd_url，
+        因此可以和 Agent 1 并行执行，是流程并行化的关键切入点。
+
+        写入 state 的字段：
+            - jd_raw_text（Tool 2.2 覆写为去噪后的 JD 正文）
+            - jd_source_type = "url"
+            - job_requirements（LLM 结构化的 JobRequirement dict）
+
+        Args:
+            state: WorkflowState，不需要任何前置产出
+            jd_url: 招聘职位详情页 URL
+
+        Returns:
+            更新后的 state（含 jd_raw_text 和 job_requirements，
+            但尚无 match_result / gap_report，等 match_resume 补齐）
+        """
+        try:
+            state["current_stage"] = "job_analysis"
+            state["error"] = None
+            self._publish(state)
+
+            # Tool 2.1: 从 URL 抓取 JD 页面
+            fetch_jd_node(state, jd_url)
+            self._publish(state)
+
+            # Tool 2.2: 提取 JD 正文（去噪）
+            extract_jd_node(state)
+            self._publish(state)
+
+            # Tool 2.3: LLM 结构化 JD
+            structure_jd_node(state)
+            self._publish(state)
+            return state
+
+        except Exception as exc:
+            state["current_stage"] = "error"
+            state["error"] = str(exc)
+            self._publish(state)
+            return state
+
+    def match_resume(self, state: WorkflowState) -> WorkflowState:
+        """只跑 Tool 2.4：LLM 简历-岗位语义匹配 + gap 分析。
+
+        前置条件（由调用方保证，本方法不检查）：
+            - state["structured_resume"] 已由 Agent 1 写入
+            - state["job_requirements"] 已由 prepare_jd 写入
+
+        写入 state 的字段：
+            - match_result（含 overall_score / matched_skills / missing_skills）
+            - gap_report（含 critical_gaps）
+            - current_stage = "done"（成功）或 "error"（失败）
+        """
+        try:
+            match_resume_node(state)
+            self._publish(state)
+            state["current_stage"] = "done"
+            self._publish(state)
+            return state
+
+        except Exception as exc:
+            state["current_stage"] = "error"
+            state["error"] = str(exc)
+            self._publish(state)
+            return state
+
 
 def run_job_analysis_agent(
     state: WorkflowState,
