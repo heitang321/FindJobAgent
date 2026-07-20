@@ -14,20 +14,7 @@ function handleLogout() {
 <template>
   <el-container class="layout-container">
     <el-header class="header">
-      <div class="header-left">
-        <div class="logo">FindJobAgent</div>
-        <el-menu
-          v-if="userStore.token"
-          :default-active="$route.path"
-          mode="horizontal"
-          :ellipsis="false"
-          router
-          class="nav-menu"
-        >
-          <el-menu-item index="/">首页</el-menu-item>
-          <el-menu-item index="/history">历史记录</el-menu-item>
-        </el-menu>
-      </div>
+      <div class="logo">FindJobAgent</div>
       <div class="header-right">
         <template v-if="userStore.token">
           <span class="username">{{ userStore.userInfo?.username || '用户' }}</span>
@@ -57,16 +44,6 @@ function handleLogout() {
   background-color: #fff;
   border-bottom: 1px solid #e4e7ed;
   height: var(--header-height);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.nav-menu {
-  border-bottom: none !important;
 }
 
 .logo {

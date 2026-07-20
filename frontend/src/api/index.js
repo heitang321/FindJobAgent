@@ -16,9 +16,6 @@ export const registerWithEmail = (payload) => request.post('/auth/register', pay
 /** 邮箱验证码登录 */
 export const loginWithEmail = (payload) => request.post('/auth/login', payload)
 
-/** 获取当前用户的简历任务历史列表 */
-export const getResumeHistory = () => request.get('/resume/history')
-
 /** 上传简历并启动 Agent 1 分析（异步后台执行） */
 export const uploadResume = (file) => {
   const form = new FormData()

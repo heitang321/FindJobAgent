@@ -27,14 +27,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
 
-    # ===== 数据库 (MySQL) =====
-    MYSQL_HOST: str = "localhost"
-    MYSQL_PORT: int = 3306
-    MYSQL_USER: str = "root"
-    MYSQL_PASSWORD: str = ""
-    MYSQL_DB: str = "job_agent"
-    # 自动拼接同步连接 URL: mysql+pymysql://user:pass@host:port/db
-    DATABASE_URL: str = ""
+    # ===== 数据库 =====
+    # 格式: postgresql+asyncpg://用户名:密码@主机:端口/数据库名
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/findjobagent"
 
     # ===== JWT 认证（预留）=====
     SECRET_KEY: str = "change-me-in-production"
@@ -42,6 +37,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 天
 
     # ===== 登录注册 / 邮箱验证码 =====
+    AUTH_LOCAL_USER_STORE: str = "data/auth_users.json"
     AUTH_VERIFICATION_EXPIRE_SECONDS: int = 300
     AUTH_VERIFICATION_RESEND_SECONDS: int = 60
     AUTH_VERIFICATION_CODE_LENGTH: int = 6
@@ -77,15 +73,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """获取配置单例，lru_cache 保证全局只读取一次 .env。"""
-    s = Settings()
-    # 如果未显式配置 DATABASE_URL，则从 MYSQL_* 字段自动拼接
-    if not s.DATABASE_URL:
-        s.DATABASE_URL = (
-            f"mysql+pymysql://{s.MYSQL_USER}:{s.MYSQL_PASSWORD}"
-            f"@{s.MYSQL_HOST}:{s.MYSQL_PORT}/{s.MYSQL_DB}"
-            "?charset=utf8mb4"
-        )
-    return s
+    return Settings()
 
 
 settings = get_settings()
