@@ -11,7 +11,10 @@ from typing import Any
 # 所有 LLM callable 现在都是 async（返回 Awaitable）。
 # 注入方需要写成 `async def llm(prompt) -> str | dict: ...`，
 # 这是 LangGraph async 节点 / asyncio.gather 并发的前提。
-LLMCallable = Callable[[str], Awaitable[str | dict[str, Any]]]
+LLMCallable = Callable[
+    [str],
+    str | dict[str, Any] | Awaitable[str | dict[str, Any]],
+]
 
 
 def build_resume_structure_prompt(raw_text: str) -> str:

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from inspect import isawaitable
 from typing import Any
 
 from app.tools._resume_structurer.fallback import fallback_structure
@@ -27,19 +28,12 @@ async def resume_structurer(
 ) -> dict[str, Any]:
     """返回规范化后的结构化简历和评估结果。
 
-<<<<<<< HEAD
-    An injected ``llm`` is used when supplied. Otherwise the configured model
-    is used only when ``use_configured_llm`` is true. Any unavailable model,
-    invalid response, or model error falls back to deterministic parsing while
-    preserving the error in ``evaluation.llm_error``.
-
-    重构后是 async：因为 configured_llm 改成 `await MyModel.get_model().ainvoke()`，
-    注入的 LLMCallable 也是 async callable（见 _resume_structurer/llm.py）。
-=======
     如果传入 ``llm``，则优先使用它。否则只有当 ``use_configured_llm`` 为 true 时
     才使用已配置模型。模型不可用、响应无效或模型报错时，会回退到确定性解析，
     同时将错误保存在 ``evaluation.llm_error`` 中。
->>>>>>> 18ba918438e3c2c0c02e976d94446dd40b48493d
+
+    配置模型使用原生异步调用；测试和扩展代码也可以注入同步 callable，
+    本函数会自动识别返回值是否可等待。
     """
     model = llm
     if model is None and use_configured_llm:
@@ -49,7 +43,9 @@ async def resume_structurer(
         return normalize_result(fallback_structure(raw_text))
 
     try:
-        response = await model(build_resume_structure_prompt(raw_text))
+        response = model(build_resume_structure_prompt(raw_text))
+        if isawaitable(response):
+            response = await response
         result = normalize_result(parse_llm_response(response))
         result["evaluation"]["analysis_source"] = (
             result["evaluation"]["analysis_source"] or "llm"

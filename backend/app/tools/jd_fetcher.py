@@ -1,24 +1,14 @@
-"""JD 抓取工具
+"""通过真实 Edge 的 CDP 接口抓取招聘页面。
 
-从招聘网站 URL 抓取职位描述（JD）文本。
-
-设计思路：
-1. 通过 CDP 连接真实 Edge 浏览器（非 Playwright 启动的 Chromium），
-   绕过腾讯云 EdgeOne 的高级机器人检测
-2. Edge 使用和 login 脚本相同的 BROWSER_DATA_DIR，自动带登录态
-3. 提取页面可见文本（innerText），不做针对特定网站的 CSS 选择器解析
-4. 后续由 LLM 从页面文本中提取 JD 正文（见 requirement_extractor）
-
-为什么用 CDP 而不是 launch_persistent_context:
-    Playwright 的 launch_persistent_context 会注入 --enable-automation 等
-    CDP 自动化标志，EdgeOne 能检测到这些标志并返回验证页面。
-    CDP 模式连接的是 subprocess 启动的真实 Edge，没有这些自动化标志。
-
-前置条件：
-    首次使用前，需先运行 `python -m app.tools.login` 登录招聘网站，
-    登录态会保存在 .browser_data/ 目录，后续抓取自动复用。
+公开入口保持异步，但完整的 Playwright 同步生命周期运行在工作线程中。
+这是刻意的 Windows 兼容设计：部分 Uvicorn/asyncio 事件循环无法创建
+Playwright 驱动所需的异步子进程，会直接抛出 ``NotImplementedError``。
 """
+
 from __future__ import annotations
+
+import asyncio
+from urllib.parse import urlencode
 
 from app.tools._browser import (
     CDP_ENDPOINT,
@@ -27,71 +17,137 @@ from app.tools._browser import (
 )
 
 
-async def fetch_jd_from_url(url: str, timeout: int = 15000, render_wait: int = 3000) -> str:
-    """用 CDP 连接的真实 Edge 浏览器抓取 URL，返回页面文本。
+class NoSearchResultsError(RuntimeError):
+    """搜索页正常打开，但当前关键词没有解析到岗位。"""
 
-    自动启动 Edge（如未运行），使用 BROWSER_DATA_DIR 中的登录态。
-    抓取完成后自动关闭由本函数启动的 Edge 进程。
 
-    重构后是 async：用 playwright.async_api.async_playwright 替代 sync_playwright，
-    配合 LangGraph async 节点使用，避开 sync API 与 asyncio 事件循环冲突。
-
-    Args:
-        url: 招聘职位详情页 URL
-        timeout: 页面加载超时（毫秒），默认 15 秒
-        render_wait: DOM 加载后额外等待 JS 渲染的时间（毫秒），默认 3 秒。
-            招聘网站常有持续的网络请求（广告、统计上报），
-            会导致 networkidle 永远不触发，所以改用固定等待。
-
-    Returns:
-        页面的可见文本内容
-
-    Raises:
-        FileNotFoundError: Edge 未安装
-        RuntimeError: Edge 启动失败
-        Exception: 页面加载失败或超时
-    """
+def _load_sync_playwright():
     try:
-        from playwright.async_api import async_playwright
+        from playwright.sync_api import sync_playwright
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            "抓取 JD URL 需要安装 Playwright：pip install playwright"
+            "浏览器抓取需要安装 Playwright：pip install playwright"
         ) from exc
+    return sync_playwright
 
-    # 启动 Edge（如果 CDP 端口未就绪则自动启动，返回进程对象用于后续清理）
+
+def _error_detail(exc: BaseException) -> str:
+    """异常没有消息时也返回可诊断的文本。"""
+    message = str(exc).strip()
+    return f"{type(exc).__name__}: {message}" if message else type(exc).__name__
+
+
+def _fetch_jd_from_url_sync(
+    url: str,
+    timeout: int,
+    render_wait: int,
+) -> str:
+    """在线程中完成 Edge 启动、Playwright 连接和页面读取。"""
+    sync_playwright = _load_sync_playwright()
     proc = ensure_browser_running()
 
     try:
-        async with async_playwright() as p:
-            # 通过 CDP 连接到真实 Edge
-            # connect_over_cdp 连接的是 subprocess 启动的真实浏览器，
-            # 没有 Playwright 的 --enable-automation 等自动化标志
-            browser = await p.chromium.connect_over_cdp(CDP_ENDPOINT)
-
-            # 获取 Edge 已有的浏览器上下文（启动时自动创建）
-            context = browser.contexts[0] if browser.contexts else await browser.new_context()
-
-            # 新开一个页面来抓取（不影响用户可能打开的其他页面）
-            page = await context.new_page()
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.connect_over_cdp(CDP_ENDPOINT)
+            context = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = context.new_page()
             try:
-                # domcontentloaded: 等 DOM 解析完成，不等所有资源
-                await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-                # 固定等待，让 JS 渲染职位内容
-                await page.wait_for_timeout(render_wait)
-                # 提取页面可见文本
-                text = await page.inner_text("body")
-                return text
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                page.wait_for_timeout(render_wait)
+                return page.inner_text("body")
             finally:
-                await page.close()
-                # 不调用 browser.close() —— 那会关闭整个 Edge
-                # async_playwright 上下文退出时自动断开 CDP 连接
+                page.close()
+                # 不调用 browser.close()，避免关闭用户已打开的整个 Edge。
+    except Exception as exc:
+        raise RuntimeError(f"JD 页面抓取失败（{_error_detail(exc)}）") from exc
     finally:
-        # 关闭我们启动的 Edge 进程（如果是我们启动的）
         cleanup_browser(proc)
 
 
+async def fetch_jd_from_url(
+    url: str,
+    timeout: int = 15000,
+    render_wait: int = 3000,
+) -> str:
+    """抓取职位详情页可见文本，不阻塞 FastAPI 事件循环。"""
+    return await asyncio.to_thread(
+        _fetch_jd_from_url_sync,
+        url,
+        timeout,
+        render_wait,
+    )
+
+
+def _fetch_search_page_sync(
+    keywords: str,
+    city: str,
+    timeout: int,
+    wait_selector: str,
+    wait_timeout: int,
+    max_results: int,
+) -> list[dict]:
+    """在线程中抓取并解析 zhaopin 搜索结果。"""
+    sync_playwright = _load_sync_playwright()
+
+    from app.tools.search_result_parser import parse_from_sync_page
+
+    params = {"kw": keywords}
+    if city:
+        params["jl"] = city
+    url = f"https://sou.zhaopin.com/?{urlencode(params)}"
+
+    proc = ensure_browser_running()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.connect_over_cdp(CDP_ENDPOINT)
+            context = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = context.new_page()
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                try:
+                    page.wait_for_selector(wait_selector, timeout=wait_timeout)
+                except Exception:
+                    # 页面可能改版或仍在异步渲染，额外等待后交给解析器判断。
+                    page.wait_for_timeout(5000)
+
+                cards = parse_from_sync_page(page)
+                if max_results:
+                    cards = cards[:max_results]
+                if not cards:
+                    raise NoSearchResultsError(f"关键词“{keywords}”没有匹配到岗位")
+                return cards
+            finally:
+                page.close()
+    except NoSearchResultsError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"岗位搜索页抓取失败（{_error_detail(exc)}）") from exc
+    finally:
+        cleanup_browser(proc)
+
+
+async def fetch_search_page(
+    keywords: str,
+    city: str = "",
+    timeout: int = 30000,
+    wait_selector: str = ".joblist-box__item",
+    wait_timeout: int = 10000,
+    max_results: int = 20,
+) -> list[dict]:
+    """搜索 zhaopin 岗位，不阻塞或依赖 FastAPI 的事件循环实现。"""
+    return await asyncio.to_thread(
+        _fetch_search_page_sync,
+        keywords,
+        city,
+        timeout,
+        wait_selector,
+        wait_timeout,
+        max_results,
+    )
+
+
 async def main() -> None:
-    """测试入口：抓取一个 URL 并打印前 2000 字符"""
+    """命令行测试入口。"""
     test_url = input("请输入招聘职位 URL: ").strip()
     if test_url:
         print(f"\n正在抓取: {test_url}")
@@ -102,5 +158,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())

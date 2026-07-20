@@ -41,10 +41,8 @@ FindJobAgent/
 
 ```bash
 cd backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# Linux/Mac: source .venv/bin/activate
-pip install -r requirements.txt
+conda env update -n Agent -f environment.yml
+conda activate Agent
 cp .env.example .env  # 修改数据库连接等配置
 uvicorn app.main:app --reload --port 8000
 ```

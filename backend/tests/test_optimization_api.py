@@ -14,6 +14,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.api.v1.router import api_router  # noqa: E402
+from app.api.deps import get_current_user  # noqa: E402
 from app.schemas.workflow_state import initial_workflow_state  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.services.resume_tasks import resume_task_store  # noqa: E402
@@ -21,12 +22,17 @@ from app.services.resume_tasks import resume_task_store  # noqa: E402
 
 def _client() -> TestClient:
     app = FastAPI()
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": "test-user",
+        "email": "test@example.com",
+        "username": "tester",
+    }
     app.include_router(api_router, prefix="/api/v1")
     return TestClient(app)
 
 
 def _ready_state(task_id: str) -> dict:
-    state = initial_workflow_state(task_id, "resume.docx")
+    state = initial_workflow_state(task_id, "resume.docx", user_id="test-user")
     state["structured_resume"] = {
         "basic_info": {"name": "李四", "phone": "", "email": "", "location": ""},
         "education": [],
@@ -73,7 +79,11 @@ class TestOptimizationApi:
         )
 
     def test_trigger_requires_previous_agents(self):
-        state = initial_workflow_state("task-incomplete", "resume.docx")
+        state = initial_workflow_state(
+            "task-incomplete",
+            "resume.docx",
+            user_id="test-user",
+        )
         resume_task_store.set(state["task_id"], state)
 
         response = _client().post("/api/v1/optimize/task-incomplete")

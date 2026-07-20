@@ -1,4 +1,5 @@
 """Agent 1 简历分析使用的内存任务服务。"""
+
 from __future__ import annotations
 
 import shutil
@@ -35,7 +36,16 @@ class ResumeTaskStore:
             return dict(state) if state else None
 
     def update(self, state: WorkflowState) -> None:
-        self.set(state["task_id"], state)
+        """合并更新任务状态。
+
+        LangGraph 并发分支可能只发布自己负责的字段。使用字段级合并可以避免
+        A1/A2 的 partial state 覆盖另一分支已经写入的结果。
+        """
+        task_id = state["task_id"]
+        with self._lock:
+            current = dict(self._tasks.get(task_id, {}))
+            current.update(state)
+            self._tasks[task_id] = current
 
 
 resume_task_store = ResumeTaskStore()
@@ -46,17 +56,46 @@ def _safe_filename(filename: str) -> str:
     return name.replace("/", "_").replace("\\", "_")
 
 
-def save_uploaded_resume(file: UploadFile) -> WorkflowState:
+class ResumeUploadTooLarge(ValueError):
+    """上传文件超过配置上限。"""
+
+
+def save_uploaded_resume(file: UploadFile, user_id: str) -> WorkflowState:
     task_id = uuid4().hex
-    upload_dir = Path(settings.RESUME_UPLOAD_DIR) / task_id
+    configured_dir = Path(settings.RESUME_UPLOAD_DIR)
+    upload_root = (
+        configured_dir
+        if configured_dir.is_absolute()
+        else Path(__file__).resolve().parents[2] / configured_dir
+    )
+    upload_dir = upload_root / task_id
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     target = upload_dir / _safe_filename(file.filename or "resume")
-    with target.open("wb") as out:
-        shutil.copyfileobj(file.file, out)
+    size = 0
+    try:
+        with target.open("wb") as out:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > settings.RESUME_MAX_UPLOAD_BYTES:
+                    raise ResumeUploadTooLarge(
+                        f"简历文件不能超过 {settings.RESUME_MAX_UPLOAD_BYTES // 1024 // 1024} MB"
+                    )
+                out.write(chunk)
 
-    state = initial_workflow_state(task_id=task_id, file_path=str(target))
-    state["file_type"] = file_type_detector(str(target))["file_type"]
+        file_type = file_type_detector(str(target))["file_type"]
+        if file_type not in {"pdf", "docx"}:
+            raise ValueError("仅支持有效的 PDF 或 DOCX 简历文件")
+    except Exception:
+        shutil.rmtree(upload_dir, ignore_errors=True)
+        raise
+
+    state = initial_workflow_state(
+        task_id=task_id,
+        file_path=str(target),
+        user_id=user_id,
+    )
+    state["file_type"] = file_type
     resume_task_store.set(task_id, state)
     return state
 
@@ -70,6 +109,8 @@ async def analyze_resume_task(task_id: str) -> WorkflowState:
     state = resume_task_store.get(task_id)
     if state is None:
         raise KeyError(task_id)
+    if state.get("structured_resume"):
+        return state
     return await run_resume_analysis_agent(
         state,
         on_state_update=resume_task_store.update,

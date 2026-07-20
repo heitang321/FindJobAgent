@@ -25,7 +25,7 @@ export const useUserStore = defineStore('user', () => {
       const data = await getUserInfo()
       userInfo.value = data
       return data
-    } catch (error) {
+    } catch {
       setToken('')
       userInfo.value = null
       return null

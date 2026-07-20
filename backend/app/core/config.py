@@ -2,6 +2,7 @@
 
 使用 pydantic-settings 从环境变量 / .env 文件读取配置。
 """
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -29,7 +30,9 @@ class Settings(BaseSettings):
 
     # ===== 数据库 =====
     # 格式: postgresql+asyncpg://用户名:密码@主机:端口/数据库名
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/findjobagent"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/findjobagent"
+    )
 
     # ===== JWT 认证（预留）=====
     SECRET_KEY: str = "change-me-in-production"
@@ -51,6 +54,7 @@ class Settings(BaseSettings):
     # ===== 简历上传 =====
     # 上传文件的存储目录（相对于 backend 目录）
     RESUME_UPLOAD_DIR: str = "uploads/resumes"
+    RESUME_MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024
 
     # ===== AI 模型（OpenAI 兼容接口）=====
     # 例如 DeepSeek: AI_BASE_URL=https://api.deepseek.com/v1, AI_MODEL=deepseek-chat
@@ -64,6 +68,10 @@ class Settings(BaseSettings):
     # ===== Agent 3 简历优化 =====
     OPTIMIZATION_OUTPUT_DIR: str = "outputs/optimized_resumes"
     OPTIMIZATION_MAX_WORKERS: int = 4
+
+    # ===== 招聘网站抓取 =====
+    # 仅允许抓取这些域名及其子域名，避免把浏览器抓取接口变成通用 URL 代理。
+    JOB_ALLOWED_HOSTS: list[str] = ["zhaopin.com"]
 
     # ===== CORS =====
     # 前端开发服务器地址，允许多个来源用逗号分隔

@@ -5,21 +5,18 @@ FastAPI 后端服务。
 ## 启动
 
 ```bash
-# 1. 创建虚拟环境
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate    # Linux/Mac
+# 1. 创建或更新 Conda 环境
+conda env update -n Agent -f environment.yml
+conda activate Agent
 
-# 2. 安装依赖
-pip install -r requirements-dev.txt   # 含开发工具
-# 或只装运行时依赖
-pip install -r requirements.txt
-
-# 3. 配置环境变量
+# 2. 配置环境变量
 cp .env.example .env
 # 编辑 .env 修改数据库连接、SECRET_KEY 等
 
-# 4. 启动开发服务器
+# 3. 首次使用岗位抓取时登录招聘网站
+python -m app.tools.login
+
+# 4. 启动服务
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -44,7 +41,15 @@ uvicorn app.main:app --reload --port 8000
 ## 代码规范
 
 ```bash
-ruff check app/          # 代码检查
-black app/               # 格式化
-pytest                   # 运行测试
+ruff check app/ tests    # 代码检查
+black app/ tests         # 格式化
+pytest                   # pytest.ini 只收集 tests/
 ```
+
+## 工作流说明
+
+- 上传只负责校验并保存 PDF/DOCX，不提前调用模型。
+- 简历、岗位和优化接口都要求 Bearer Token，并校验任务归属用户。
+- 手动提交 JD URL 时，LangGraph 并行运行“简历分析”和“JD 抓取/结构化”，再执行匹配。
+- 自动推荐岗位时，如果简历尚未结构化，搜索接口会先按需运行一次简历分析。
+- JD URL 只允许 `JOB_ALLOWED_HOSTS` 中的域名及其子域名。

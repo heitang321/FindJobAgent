@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from fastapi.responses import FileResponse
 
+from app.api.deps import CurrentUser
 from app.schemas.optimization import (
     OptimizationResultResponse,
     OptimizationTriggerResponse,
@@ -21,9 +22,9 @@ from app.services.resume_tasks import resume_task_store
 router = APIRouter()
 
 
-def _task_or_404(task_id: str) -> dict:
+def _task_or_404(task_id: str, user_id: str) -> dict:
     state = resume_task_store.get(task_id)
-    if state is None:
+    if state is None or state.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Optimization task not found")
     return state
 
@@ -35,8 +36,11 @@ def _task_or_404(task_id: str) -> dict:
     summary="触发简历优化",
 )
 async def trigger_optimization(
-    task_id: str, background_tasks: BackgroundTasks
+    task_id: str,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser,
 ) -> OptimizationTriggerResponse:
+    _task_or_404(task_id, user["id"])
     try:
         state = prepare_optimization_task(task_id)
     except KeyError:
@@ -58,8 +62,11 @@ async def trigger_optimization(
     response_model=OptimizationResultResponse,
     summary="获取优化结果和对比报告",
 )
-async def get_optimization_result(task_id: str) -> OptimizationResultResponse:
-    state = _task_or_404(task_id)
+async def get_optimization_result(
+    task_id: str,
+    user: CurrentUser,
+) -> OptimizationResultResponse:
+    state = _task_or_404(task_id, user["id"])
     output_path = state.get("output_file_path")
     return OptimizationResultResponse(
         task_id=task_id,
@@ -73,8 +80,11 @@ async def get_optimization_result(task_id: str) -> OptimizationResultResponse:
 
 
 @router.get("/{task_id}/download", summary="下载优化后的 Word 简历")
-async def download_optimized_resume(task_id: str) -> FileResponse:
-    state = _task_or_404(task_id)
+async def download_optimized_resume(
+    task_id: str,
+    user: CurrentUser,
+) -> FileResponse:
+    state = _task_or_404(task_id, user["id"])
     output_path = state.get("output_file_path")
     if not output_path or not Path(output_path).is_file():
         raise HTTPException(status_code=409, detail="Optimized resume is not ready")
