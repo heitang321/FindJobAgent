@@ -5,7 +5,7 @@ Vue3 + Vite + Element Plus 前端。
 ## 启动
 
 ```bash
-# 安装依赖（需要 Node 18+）
+# 安装依赖（需要 Node 20.19+、22.13+ 或 24+）
 npm install
 
 # 配置环境变量
@@ -34,6 +34,7 @@ npm run dev
 ```bash
 npm run build     # 生产构建，输出到 dist/
 npm run preview   # 本地预览构建结果
+npm run lint:check # ESLint 只读检查
 ```
 
 ## 约定

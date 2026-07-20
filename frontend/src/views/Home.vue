@@ -1,10 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Upload as UploadIcon, Loading } from '@element-plus/icons-vue'
+import { Upload as UploadIcon, Loading, Search } from '@element-plus/icons-vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { checkHealth } from '@/api'
 import request from '@/api/request'
+import JobCard from '@/components/JobCard.vue'
 
 const wf = useWorkflowStore()
 const healthStatus = ref('检测中...')
@@ -33,7 +34,7 @@ async function handleUpload(file) {
   try {
     await wf.upload(f)
     ElMessage.success('简历已上传，正在分析...')
-  } catch (e) {}
+  } catch {}
   return false
 }
 
@@ -42,14 +43,29 @@ async function submitJd() {
   try {
     await wf.submitJob(jdUrl.value.trim())
     ElMessage.success('岗位分析完成')
-  } catch (e) {}
+  } catch {}
+}
+
+// 自动推荐岗位：调后端 /job/{taskId}/search，用简历 skills 推导关键词
+async function handleSearchJobs() {
+  try {
+    await wf.searchJobs()
+    ElMessage.success(`已检索到 ${wf.jobSearchResults.length} 个岗位，请选择一个`)
+  } catch {}
+}
+
+// 选中岗位卡片：自动填 URL 到输入框，用户可继续点"提交分析"
+function handleSelectCard(card) {
+  wf.selectJobCard(card)
+  jdUrl.value = card.url
+  ElMessage.success(`已选择：${card.title}，URL 已填入，可点"提交分析"继续`)
 }
 
 async function startOptimize() {
   try {
     await wf.optimize()
     ElMessage.success('优化任务已启动')
-  } catch (e) {}
+  } catch {}
 }
 
 async function download() {
@@ -61,8 +77,6 @@ async function download() {
   a.click()
   window.URL.revokeObjectURL(url)
 }
-
-function reset() { jdUrl.value = ''; wf.reset() }
 
 async function checkApi() {
   try {
@@ -108,15 +122,14 @@ onMounted(checkApi)
           <el-icon class="el-icon--upload"><UploadIcon /></el-icon>
           <div class="el-upload__text">拖拽文件到此处或 <em>点击上传</em></div>
           <template #tip>
-            <div class="el-upload__tip">支持 PDF / DOCX / DOC，仅本地分析</div>
+            <div class="el-upload__tip">支持 PDF / DOCX，单文件不超过 10 MB</div>
           </template>
         </el-upload>
         <div v-if="stage === 'uploading'" class="loading-hint">
           <el-icon class="is-loading"><Loading /></el-icon> 正在上传...
         </div>
-        <div v-if="stage === 'analyzing'" class="loading-hint">
-          <el-icon class="is-loading"><Loading /></el-icon>
-          Agent 1 正在结构化简历（约 10-20s）...
+        <div v-if="stage === 'job_input' && !wf.structuredResume" class="loading-hint">
+          简历已安全保存。提交 JD 时会并行分析；自动推荐时会先分析简历再检索岗位。
         </div>
       </div>
 
@@ -141,19 +154,33 @@ onMounted(checkApi)
       <div v-if="showJdInput" class="step">
         <div class="step-header">
           <el-tag type="primary" round>步骤 2</el-tag>
-          <h3>提交岗位 JD URL</h3>
+          <h3>选择目标岗位</h3>
+          <el-button
+            v-if="stage === 'job_input'"
+            type="success"
+            :icon="Search"
+            :loading="wf.searchingJobs"
+            :disabled="wf.searchingJobs"
+            @click="handleSearchJobs"
+          >
+            {{ wf.searchingJobs ? '分析简历并检索中...' : '自动推荐岗位' }}
+          </el-button>
         </div>
+        <p v-if="stage === 'job_input' && !wf.hasSearchResults" class="step-tip">
+          两种方式选其一：① 点上方"自动推荐岗位"按钮，系统根据简历内容检索匹配岗位；
+          ② 手动粘贴 JD URL 到下方输入框
+        </p>
         <el-input
           v-model="jdUrl"
           placeholder="https://www.zhaopin.com/jobdetail/CC....htm"
           clearable
-          :disabled="stage === 'job_analyzing'"
+          :disabled="stage === 'job_analyzing' || wf.searchingJobs"
         >
           <template #append>
             <el-button
               type="primary"
               :loading="stage === 'job_analyzing'"
-              :disabled="!jdUrl.trim()"
+              :disabled="!jdUrl.trim() || wf.searchingJobs"
               @click="submitJd"
             >
               {{ stage === 'job_analyzing' ? '分析中' : '提交分析' }}
@@ -163,6 +190,33 @@ onMounted(checkApi)
         <div v-if="stage === 'job_analyzing'" class="loading-hint">
           <el-icon class="is-loading"><Loading /></el-icon>
           Agent 2 正在抓取 JD + 结构化 + 匹配分析（约 30-60s）...
+        </div>
+        <!-- 岗位卡片列表（自动推荐结果）-->
+        <div v-if="wf.hasSearchResults" class="job-list">
+          <div class="job-list-header">
+            <span class="job-list-count">
+              共 {{ wf.jobSearchResults.length }} 个岗位（关键词：{{ wf.searchKeywords }}）
+            </span>
+            <el-button text type="primary" @click="handleSearchJobs" :disabled="wf.searchingJobs">
+              重新检索
+            </el-button>
+          </div>
+          <el-row :gutter="12">
+            <el-col
+              v-for="job in wf.jobSearchResults"
+              :key="job.url"
+              :xs="24"
+              :sm="12"
+              :md="8"
+              :lg="8"
+            >
+              <JobCard
+                :job="job"
+                :selected="wf.selectedJobCard?.url === job.url"
+                @select="handleSelectCard"
+              />
+            </el-col>
+          </el-row>
         </div>
       </div>
 
@@ -289,6 +343,26 @@ onMounted(checkApi)
   gap: 6px;
   color: #909399;
   margin-top: 12px;
+}
+
+.step-tip {
+  margin: 8px 0 16px;
+  color: #909399;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.job-list { margin-top: 20px; }
+.job-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.job-list-count {
+  color: #606266;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .resume-summary p { margin: 8px 0; line-height: 1.8; }

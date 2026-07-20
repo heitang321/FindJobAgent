@@ -4,7 +4,9 @@
 - POST /api/v1/resume/upload — 上传简历，返回 task_id 和 file_type
 - GET  /api/v1/resume/{task_id}/analysis — 获取结构化简历和评估结果
 """
+
 from pathlib import Path
+import asyncio
 import sys
 
 from docx import Document
@@ -16,15 +18,28 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.api.v1.router import api_router  # noqa: E402
+from app.api.deps import get_current_user  # noqa: E402
 from app.core.config import settings  # noqa: E402
-from app.services.resume_tasks import resume_task_store  # noqa: E402
+from app.services.resume_tasks import (  # noqa: E402
+    analyze_resume_task,
+    resume_task_store,
+)
 
 
 def _create_app() -> FastAPI:
     """创建挂载了 v1 路由的 FastAPI 应用实例。"""
     app = FastAPI()
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": "test-user",
+        "email": "test@example.com",
+        "username": "tester",
+    }
     app.include_router(api_router, prefix="/api/v1")
     return app
+
+
+def _create_app_client() -> TestClient:
+    return TestClient(_create_app())
 
 
 def _make_docx(path: Path) -> None:
@@ -82,8 +97,8 @@ class TestUploadResume:
         assert body["file_type"] == "docx"
         assert body["current_stage"] == "upload"
 
-    def test_upload_triggers_background_analysis(self, tmp_path):
-        """上传后后台任务完成分析，current_stage 变为 done。"""
+    def test_upload_defers_analysis_until_needed(self, tmp_path):
+        """上传阶段只保存文件，不提前消耗一次 LLM 调用。"""
         app = _create_app()
         client = TestClient(app)
 
@@ -104,10 +119,10 @@ class TestUploadResume:
 
         task_id = upload_resp.json()["task_id"]
 
-        # TestClient 会等待 background_tasks 完成
         analysis = client.get(f"/api/v1/resume/{task_id}/analysis")
         assert analysis.status_code == 200
-        assert analysis.json()["current_stage"] == "done"
+        assert analysis.json()["current_stage"] == "upload"
+        assert analysis.json()["structured_resume"] == {}
 
     def test_upload_response_schema(self, tmp_path):
         """上传响应包含 task_id、file_type、current_stage 三个字段。"""
@@ -125,6 +140,24 @@ class TestUploadResume:
 
         body = response.json()
         assert set(body.keys()) == {"task_id", "file_type", "current_stage"}
+
+    def test_upload_rejects_unsupported_file(self):
+        response = _create_app_client().post(
+            "/api/v1/resume/upload",
+            files={"file": ("resume.txt", b"not a resume", "text/plain")},
+        )
+
+        assert response.status_code == 400
+        assert "PDF" in response.json()["detail"]
+
+    def test_upload_rejects_oversized_file(self, monkeypatch):
+        monkeypatch.setattr(settings, "RESUME_MAX_UPLOAD_BYTES", 8)
+        response = _create_app_client().post(
+            "/api/v1/resume/upload",
+            files={"file": ("resume.pdf", b"%PDF-1.7 oversized", "application/pdf")},
+        )
+
+        assert response.status_code == 413
 
 
 # ========================================================================
@@ -155,6 +188,7 @@ class TestGetResumeAnalysis:
             )
 
         task_id = upload_resp.json()["task_id"]
+        asyncio.run(analyze_resume_task(task_id))
         response = client.get(f"/api/v1/resume/{task_id}/analysis")
 
         assert response.status_code == 200
@@ -179,6 +213,7 @@ class TestGetResumeAnalysis:
             )
 
         task_id = upload_resp.json()["task_id"]
+        asyncio.run(analyze_resume_task(task_id))
         data = client.get(f"/api/v1/resume/{task_id}/analysis").json()
 
         sr = data["structured_resume"]
@@ -202,6 +237,7 @@ class TestGetResumeAnalysis:
             )
 
         task_id = upload_resp.json()["task_id"]
+        asyncio.run(analyze_resume_task(task_id))
         data = client.get(f"/api/v1/resume/{task_id}/analysis").json()
 
         ev = data["evaluation"]
@@ -236,6 +272,8 @@ class TestGetResumeAnalysis:
             "converted_file_path",
             "structured_resume",
             "evaluation",
+            "job_search_results",
+            "selected_jd_url",
         }
 
     def test_get_analysis_not_found(self):
@@ -246,6 +284,26 @@ class TestGetResumeAnalysis:
         response = client.get("/api/v1/resume/nonexistent-task-id/analysis")
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
+
+    def test_get_analysis_hides_other_users_task(self, tmp_path):
+        app = _create_app()
+        client = TestClient(app)
+        docx = tmp_path / "resume.docx"
+        _make_docx(docx)
+        with docx.open("rb") as file:
+            task_id = client.post(
+                "/api/v1/resume/upload",
+                files={"file": ("resume.docx", file)},
+            ).json()["task_id"]
+
+        app.dependency_overrides[get_current_user] = lambda: {
+            "id": "another-user",
+            "email": "other@example.com",
+            "username": "other",
+        }
+
+        response = client.get(f"/api/v1/resume/{task_id}/analysis")
+        assert response.status_code == 404
 
 
 # ========================================================================
@@ -278,7 +336,8 @@ class TestEndToEndFlow:
         assert upload_resp.status_code == 200
         task_id = upload_resp.json()["task_id"]
 
-        # 2. 获取分析结果（background_tasks 已完成）
+        # 2. 由后续业务动作按需执行 Agent 1
+        asyncio.run(analyze_resume_task(task_id))
         analysis_resp = client.get(f"/api/v1/resume/{task_id}/analysis")
         assert analysis_resp.status_code == 200
 
@@ -316,6 +375,7 @@ class TestEndToEndFlow:
 
         # 每个都能独立获取分析结果
         for i, tid in enumerate(task_ids):
+            asyncio.run(analyze_resume_task(tid))
             data = client.get(f"/api/v1/resume/{tid}/analysis").json()
             assert data["structured_resume"]["basic_info"]["phone"] == f"1380013800{i}"
 

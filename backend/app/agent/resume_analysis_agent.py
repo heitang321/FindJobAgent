@@ -11,11 +11,17 @@
 
 Tool 之间不直接传数据，而是读写 WorkflowState 的字段。每个 node 是一个
 LangGraph 节点函数，接收 state、读取上游字段、写入自己的产出字段。
+
+重构后所有节点都是 async def：1.1 / 1.2 / 1.3 内部是 sync 工具调用，
+节点本身 async 是为了 LangGraph async 图的一致性；1.4 是真正 async（await
+resume_structurer，后者走 ChatOpenAI.ainvoke）。这样 LangGraph 用 .ainvoke
+跑图时，所有节点都能在 asyncio 事件循环里正确执行。
 """
+
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
-
 
 from app.schemas.workflow_state import WorkflowState
 from app.tools.document_text_extractor import document_text_extractor
@@ -30,14 +36,14 @@ StateCallback = Callable[[WorkflowState], None]
 # ===== LangGraph 节点函数 =====
 
 
-def detect_file_type_node(state: WorkflowState) -> WorkflowState:
+async def detect_file_type_node(state: WorkflowState) -> WorkflowState:
     """Tool 1.1: 检测文件类型，写入 state["file_type"]。"""
-    result = file_type_detector(state["file_path"])
+    result = await asyncio.to_thread(file_type_detector, state["file_path"])
     state["file_type"] = result["file_type"]
     return state
 
 
-def convert_pdf_node(state: WorkflowState) -> WorkflowState:
+async def convert_pdf_node(state: WorkflowState) -> WorkflowState:
     """Tool 1.2: PDF 转 Word，写入 state["converted_file_path"]。
 
     - PDF：调用 pdf_to_word_converter 转换
@@ -46,7 +52,7 @@ def convert_pdf_node(state: WorkflowState) -> WorkflowState:
     """
     file_type = state.get("file_type", "unknown")
     if file_type == "pdf":
-        result = pdf_to_word_converter(state["file_path"])
+        result = await asyncio.to_thread(pdf_to_word_converter, state["file_path"])
         state["converted_file_path"] = (
             str(result["converted_path"]) if result.get("success") else None
         )
@@ -57,7 +63,7 @@ def convert_pdf_node(state: WorkflowState) -> WorkflowState:
     return state
 
 
-def extract_text_node(state: WorkflowState) -> WorkflowState:
+async def extract_text_node(state: WorkflowState) -> WorkflowState:
     """Tool 1.3: 提取文本，写入 state["raw_text"]。
 
     PDF 必须直接读取原文件，避免保真 Word 中的页面图片无法提取文本，
@@ -67,21 +73,22 @@ def extract_text_node(state: WorkflowState) -> WorkflowState:
         extract_path = state["file_path"]
     else:
         extract_path = state.get("converted_file_path") or state["file_path"]
-    result = document_text_extractor(extract_path)
+    result = await asyncio.to_thread(document_text_extractor, extract_path)
     state["raw_text"] = str(result["raw_text"])
     return state
 
 
-def structure_resume_node(
+async def structure_resume_node(
     state: WorkflowState,
     llm: LLMCallable | None = None,
     use_configured_llm: bool = True,
 ) -> WorkflowState:
     """Tool 1.4: 结构化提取 + 评估，写入 state["structured_resume"] 和 state["resume_evaluation"]。
 
-    这是 Agent 内部唯一调用 LLM 的步骤。
+    这是 Agent 内部唯一调用 LLM 的步骤。重构后是真正 async：resume_structurer
+    内部走 ChatOpenAI.ainvoke()，配合 LangGraph async 节点使用。
     """
-    result = resume_structurer(
+    result = await resume_structurer(
         state.get("raw_text", ""),
         llm=llm,
         use_configured_llm=use_configured_llm and llm is None,
@@ -99,6 +106,8 @@ class ResumeAnalysisAgent:
 
     线性执行四个 Tool 节点，通过 WorkflowState 传递数据。
     支持注入 LLM callable 和 state 变更回调（用于 services 层持久化）。
+
+    重构后 run 改为 async：配合 LangGraph 的 async 图和 .ainvoke() 使用。
     """
 
     def __init__(
@@ -116,7 +125,7 @@ class ResumeAnalysisAgent:
         if self.on_state_update:
             self.on_state_update(state)
 
-    def run(self, state: WorkflowState) -> WorkflowState:
+    async def run(self, state: WorkflowState) -> WorkflowState:
         """执行完整的简历分析流程：1.1 → 1.2 → 1.3 → 1.4。"""
         try:
             state["current_stage"] = "analyzing"
@@ -124,7 +133,7 @@ class ResumeAnalysisAgent:
             self._publish(state)
 
             # Tool 1.1: 检测文件类型
-            detect_file_type_node(state)
+            await detect_file_type_node(state)
             self._publish(state)
 
             file_type = state.get("file_type", "unknown")
@@ -136,18 +145,18 @@ class ResumeAnalysisAgent:
                 )
 
             # Tool 1.2: PDF 转 Word（如需）
-            convert_pdf_node(state)
+            await convert_pdf_node(state)
             self._publish(state)
 
             if state.get("file_type") == "pdf" and not state.get("converted_file_path"):
                 raise ValueError("PDF to DOCX conversion failed.")
 
             # Tool 1.3: 提取文本
-            extract_text_node(state)
+            await extract_text_node(state)
             self._publish(state)
 
             # Tool 1.4: 结构化提取 + 评估（唯一 LLM 调用）
-            structure_resume_node(
+            await structure_resume_node(
                 state,
                 llm=self.llm,
                 use_configured_llm=self.use_configured_llm,
@@ -165,7 +174,7 @@ class ResumeAnalysisAgent:
             return state
 
 
-def run_resume_analysis_agent(
+async def run_resume_analysis_agent(
     state: WorkflowState,
     llm: LLMCallable | None = None,
     on_state_update: StateCallback | None = None,
@@ -173,9 +182,9 @@ def run_resume_analysis_agent(
 ) -> WorkflowState:
     """便捷函数：创建 ResumeAnalysisAgent 并运行。
 
-    供 services 层和测试使用。
+    重构后是 async：供 services 层和 LangGraph 调用方 await 使用。
     """
-    return ResumeAnalysisAgent(
+    return await ResumeAnalysisAgent(
         llm=llm,
         on_state_update=on_state_update,
         use_configured_llm=use_configured_llm,

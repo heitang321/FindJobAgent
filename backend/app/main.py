@@ -7,6 +7,7 @@
     API 文档: http://localhost:8000/docs
     健康检查: http://localhost:8000/api/v1/health
 """
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     # 自动迁移：补齐已有表中缺失的 updated_at 列
     _ensure_updated_at_columns()
+    _ensure_resume_task_columns()
     print(f"[{settings.APP_NAME}] 数据库表已就绪")
     yield
     # ===== shutdown =====
@@ -88,6 +90,32 @@ def _ensure_updated_at_columns() -> None:
                     )
                 )
             print(f"  [迁移] 已为表 `{table_name}` 添加 `updated_at` 列")
+
+
+def _ensure_resume_task_columns() -> None:
+    """补齐岗位搜索合并后新增的 resume_tasks 字段。"""
+    table_name = "resume_tasks"
+    inspector = inspect(engine)
+    if table_name not in inspector.get_table_names():
+        return
+
+    existing = {column["name"] for column in inspector.get_columns(table_name)}
+    required = {
+        "jd_url": "TEXT NULL",
+        "job_search_results": "JSON NULL",
+        "selected_jd_url": "TEXT NULL",
+    }
+    for column_name, column_type in required.items():
+        if column_name in existing:
+            continue
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    f"ALTER TABLE `{table_name}` "
+                    f"ADD COLUMN `{column_name}` {column_type}"
+                )
+            )
+        print(f"  [迁移] 已为表 `{table_name}` 添加 `{column_name}` 列")
 
 
 @app.get("/", tags=["root"])

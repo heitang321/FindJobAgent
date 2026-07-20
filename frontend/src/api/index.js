@@ -19,7 +19,7 @@ export const loginWithEmail = (payload) => request.post('/auth/login', payload)
 /** 获取当前用户的简历任务历史列表 */
 export const getResumeHistory = () => request.get('/resume/history')
 
-/** 上传简历并启动 Agent 1 分析（异步后台执行） */
+/** 上传并保存简历；Agent 1 在提交 JD 或自动推荐时按需执行 */
 export const uploadResume = (file) => {
   const form = new FormData()
   form.append('file', file)
@@ -35,6 +35,16 @@ export const getResumeAnalysis = (taskId) =>
 /** 提交 JD URL，同步执行 Agent 2（抓取 JD → 结构化 → 匹配 → 差距分析） */
 export const submitJdUrl = (taskId, jdUrl) =>
   request.post(`/job/${taskId}/analyze`, { jd_url: jdUrl })
+
+/** 根据简历内容自动检索 zhaopin 岗位，返回岗位卡片列表供用户选择
+ *  keywords 留空时后端从简历 skills 自动推导
+ */
+export const searchJobs = (taskId, { keywords = '', city = '', maxResults = 10 } = {}) =>
+  request.post(`/job/${taskId}/search`, {
+    keywords: keywords || null,
+    city,
+    max_results: maxResults,
+  })
 
 /** 触发 Agent 3 简历优化 */
 export const triggerOptimization = (taskId) => request.post(`/optimize/${taskId}`)

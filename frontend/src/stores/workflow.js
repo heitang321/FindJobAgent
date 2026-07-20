@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import {
   getOptimizationResult,
   getResumeAnalysis,
+  searchJobs as searchJobsApi,
   submitJdUrl,
   triggerOptimization,
   uploadResume,
@@ -13,11 +14,15 @@ import {
  * 单页流水线中跨组件共享 taskId 与各阶段产出。
  *
  * 阶段流转：
- *   idle → uploading → analyzing（轮询 Agent1）
- *        → job_input（待用户提交 JD URL）
+ *   idle → uploading → job_input（待用户提交 JD URL 或自动推荐岗位）
  *        → job_analyzing（同步等 Agent2）
  *        → optimizing（轮询 Agent3）
  *        → done / error
+ *
+ * job_input 阶段有两个入口：
+ *   1. 手动：用户粘贴 JD URL → submitJob(jdUrl)
+ *   2. 自动：用户点"自动推荐" → searchJobs() → 展示卡片列表 → selectJobCard(card)
+ *           → 自动填入 card.url 到 jdUrl → submitJob
  */
 export const useWorkflowStore = defineStore('workflow', () => {
   // ===== 任务标识 =====
@@ -31,6 +36,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const structuredResume = ref(null)
   const resumeEvaluation = ref(null)
 
+  // ===== 岗位搜索（job_input 阶段的自动推荐分支）=====
+  const jobSearchResults = ref([]) // 搜索结果卡片列表
+  const searchKeywords = ref('') // 实际使用的搜索关键词
+  const searchingJobs = ref(false) // 是否正在搜索
+  const selectedJobCard = ref(null) // 用户选中的卡片对象
+
   // ===== Agent 2 产出 =====
   const jobRequirements = ref(null)
   const matchResult = ref(null)
@@ -43,7 +54,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const downloadReady = ref(false)
 
   // ===== 轮询控制 =====
-  let resumePollTimer = null
   let optimizePollTimer = null
 
   // ===== 计算属性 =====
@@ -51,17 +61,26 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const isRunning = computed(() =>
     ['uploading', 'analyzing', 'job_analyzing', 'optimizing'].includes(stage.value),
   )
+  const hasSearchResults = computed(() => jobSearchResults.value.length > 0)
 
   // ===== 内部工具 =====
   function clearTimers() {
-    if (resumePollTimer) {
-      window.clearInterval(resumePollTimer)
-      resumePollTimer = null
-    }
     if (optimizePollTimer) {
       window.clearInterval(optimizePollTimer)
       optimizePollTimer = null
     }
+  }
+
+  async function syncResumeAnalysis() {
+    const data = await getResumeAnalysis(taskId.value)
+    if (Object.keys(data.structured_resume || {}).length) {
+      structuredResume.value = data.structured_resume
+      resumeEvaluation.value = data.evaluation || null
+    }
+    if (Array.isArray(data.job_search_results)) {
+      jobSearchResults.value = data.job_search_results
+    }
+    return data
   }
 
   function reset() {
@@ -71,6 +90,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     error.value = ''
     structuredResume.value = null
     resumeEvaluation.value = null
+    jobSearchResults.value = []
+    searchKeywords.value = ''
+    searchingJobs.value = false
+    selectedJobCard.value = null
     jobRequirements.value = null
     matchResult.value = null
     gapReport.value = null
@@ -87,8 +110,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     try {
       const data = await uploadResume(file)
       taskId.value = data.task_id
-      stage.value = 'analyzing'
-      startResumePolling()
+      // 关键优化：立即进入 job_input 阶段，让用户可以输入 JD URL
+      // 不再等 A1 完成 —— 后端编排函数会并行跑 A1 和 A2 前 3 步
+      stage.value = 'job_input'
       return data
     } catch (e) {
       stage.value = 'error'
@@ -97,39 +121,34 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  function startResumePolling() {
-    clearTimers()
-    resumePollTimer = window.setInterval(async () => {
-      try {
-        const data = await getResumeAnalysis(taskId.value)
-        if (data.structured_resume) {
-          structuredResume.value = data.structured_resume
-          resumeEvaluation.value = data.evaluation || null
-        }
-        if (data.current_stage === 'done' || data.current_stage === 'error') {
-          if (resumePollTimer) {
-            window.clearInterval(resumePollTimer)
-            resumePollTimer = null
-          }
-          if (data.error) {
-            stage.value = 'error'
-            error.value = data.error
-          } else if (data.structured_resume) {
-            stage.value = 'job_input'
-          }
-        }
-      } catch (e) {
-        if (resumePollTimer) {
-          window.clearInterval(resumePollTimer)
-          resumePollTimer = null
-        }
-        stage.value = 'error'
-        error.value = e.response?.data?.detail || e.message || '轮询简历分析失败'
-      }
-    }, 1500)
+  // ===== 步骤 2a：自动推荐岗位（job_input 阶段的一个入口）=====
+  async function searchJobs({ keywords = '', city = '' } = {}) {
+    if (!taskId.value) throw new Error('还没有上传简历')
+    searchingJobs.value = true
+    error.value = ''
+    try {
+      const data = await searchJobsApi(taskId.value, { keywords, city })
+      jobSearchResults.value = data.job_search_results || []
+      searchKeywords.value = data.keywords || ''
+      selectedJobCard.value = null
+      await syncResumeAnalysis()
+      return data
+    } catch (e) {
+      error.value = e.response?.data?.detail || e.message || '岗位检索失败'
+      throw e
+    } finally {
+      searchingJobs.value = false
+    }
   }
 
-  // ===== 步骤 2：提交 JD URL =====
+  // 选中一个岗位卡片：自动填 URL，进入提交分析流程
+  function selectJobCard(card) {
+    selectedJobCard.value = card
+    // 不自动提交 —— 让用户确认后再调 submitJob
+    return card
+  }
+
+  // ===== 步骤 2b：提交 JD URL（手动 URL 或自动推荐选中的卡片都走这里）=====
   async function submitJob(jdUrl) {
     if (!taskId.value) throw new Error('还没有上传简历')
     stage.value = 'job_analyzing'
@@ -138,6 +157,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       jobRequirements.value = data.job_requirements || null
       matchResult.value = data.match_result || null
       gapReport.value = data.gap_report || null
+      await syncResumeAnalysis()
       stage.value = 'ready_to_optimize'
     } catch (e) {
       stage.value = 'error'
@@ -216,6 +236,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     error,
     structuredResume,
     resumeEvaluation,
+    jobSearchResults,
+    searchKeywords,
+    searchingJobs,
+    selectedJobCard,
     jobRequirements,
     matchResult,
     gapReport,
@@ -226,8 +250,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     // computed
     matchScore,
     isRunning,
+    hasSearchResults,
     // actions
     upload,
+    searchJobs,
+    selectJobCard,
     submitJob,
     optimize,
     reset,

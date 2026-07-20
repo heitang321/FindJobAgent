@@ -35,6 +35,8 @@ ENV/
 
 # Testing
 .pytest_cache/
+.test-tmp-*/
+.pytest-tmp/
 .coverage
 htmlcov/
 .tox/
@@ -84,5 +86,9 @@ outputs/
 # Playwright 浏览器持久化数据（含登录态，敏感且机器相关）
 # 覆盖 .browser_data/ 及 .browser_data.*.bak 等变体
 backend/.browser_data*/
+# 本地网页结构探索产物（可能包含会话化页面内容）
+backend/scripts/search_page_dump/
+backend/scripts/explore_search_page.py
+backend/test_reducer.py
 # 编辑器个人配置
 .vscode/
