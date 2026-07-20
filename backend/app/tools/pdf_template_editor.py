@@ -1,4 +1,4 @@
-"""Layout-preserving PDF text-slot extraction and replacement for Agent 3."""
+"""Agent 3 使用的保留版式 PDF 文本槽提取与替换工具。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from app.schemas.optimization import SectionType
 
 @dataclass(frozen=True)
 class PdfTextSlot:
-    """One editable visual text region in the source PDF."""
+    """源 PDF 中一个可编辑的视觉文本区域。"""
 
     section_type: SectionType
     section_index: int
@@ -25,7 +25,7 @@ class PdfTextSlot:
 
 @dataclass(frozen=True)
 class PdfTextEdit:
-    """Verified replacement for one PDF text region."""
+    """一个已校验的 PDF 文本区域替换。"""
 
     page_index: int
     rect: tuple[float, float, float, float]
@@ -203,7 +203,7 @@ def extract_resume_pdf_slots(
     source_pdf_path: str | Path,
     targets: set[SectionType],
 ) -> list[PdfTextSlot]:
-    """Extract editable visual text regions from requested resume sections."""
+    """从指定简历段落中提取可编辑的视觉文本区域。"""
     import fitz
 
     source = Path(source_pdf_path).resolve()
@@ -288,7 +288,7 @@ def _font_configuration(text: str) -> tuple[str, str | None]:
 def _available_output_rect(
     page, edit: PdfTextEdit
 ) -> tuple[float, float, float, float]:
-    """Use blank space on the same visual row without erasing neighbouring text."""
+    """使用同一视觉行上的空白空间，避免擦除相邻文本。"""
     import fitz
 
     source_rect = fitz.Rect(edit.rect)
@@ -346,7 +346,7 @@ def apply_resume_pdf_edits(
     output_pdf_path: str | Path,
     edits: Iterable[PdfTextEdit],
 ) -> str:
-    """Replace verified PDF text regions while preserving page geometry."""
+    """在保留页面几何结构的前提下替换已校验的 PDF 文本区域。"""
     import fitz
 
     source = Path(source_pdf_path).resolve()

@@ -1,4 +1,4 @@
-"""Pytest path setup for running tests from the repository root."""
+"""从仓库根目录运行测试时的 Pytest 路径设置。"""
 from pathlib import Path
 import sys
 

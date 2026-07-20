@@ -1,4 +1,4 @@
-"""Shared OpenAI-compatible chat client used by application tools."""
+"""应用工具共用的 OpenAI 兼容聊天客户端。"""
 from __future__ import annotations
 
 import httpx
@@ -7,16 +7,15 @@ from app.core.config import settings
 
 
 def is_llm_configured() -> bool:
-    """Return True when an OpenAI-compatible model is configured."""
+    """当已配置 OpenAI 兼容模型时返回 True。"""
     return bool(settings.AI_API_KEY and settings.AI_BASE_URL and settings.AI_MODEL)
 
 
 def chat_completion(prompt: str, system_prompt: str = "") -> str:
-    """Call an OpenAI-compatible Chat Completions endpoint.
+    """调用 OpenAI 兼容的聊天补全接口。
 
-    The endpoint is intentionally small and dependency-light: it uses httpx
-    instead of the OpenAI SDK so DeepSeek/OpenRouter/MiMo/custom providers can
-    share the same code path.
+    这里刻意保持实现简短、依赖较少：使用 httpx 而不是 OpenAI SDK，
+    这样 DeepSeek、OpenRouter、MiMo 或自定义服务商可以共用同一条代码路径。
     """
     if not is_llm_configured():
         raise RuntimeError("AI model is not configured. Set AI_API_KEY, AI_BASE_URL and AI_MODEL.")

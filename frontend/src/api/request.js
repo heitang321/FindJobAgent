@@ -3,13 +3,13 @@ import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 
 const request = axios.create({
-  // 通过 vite proxy 代理，开发环境直接用相对路径
+  // 通过 Vite 代理转发请求，开发环境直接用相对路径
   baseURL: '/api/v1',
   // Agent 2 同步执行（LLM × 2 + CDP 抓取）可能 60-90s，给到 3 分钟
   timeout: 180000,
 })
 
-// 请求拦截器：自动携带 token
+// 请求拦截器：自动携带登录令牌
 request.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
@@ -27,9 +27,13 @@ request.interceptors.response.use(
   (error) => {
     const message = error.response?.data?.detail || error.message || '请求失败'
     ElMessage.error(message)
+    error.__messageShown = true
 
-    // 401 未授权：清除 token 并跳转登录
-    if (error.response?.status === 401) {
+    const url = error.config?.url || ''
+    const isAuthFormRequest = url.includes('/auth/login') || url.includes('/auth/register')
+
+    // 401 未授权：业务接口登录令牌失效才跳转；登录表单自身的 401 要留在当前页展示错误。
+    if (error.response?.status === 401 && !isAuthFormRequest) {
       const userStore = useUserStore()
       userStore.logout()
       window.location.href = '/login'

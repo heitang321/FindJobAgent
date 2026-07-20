@@ -81,6 +81,8 @@ Desktop.ini
 uploads/
 # 生成的优化结果
 outputs/
+# 本地开发认证数据
+backend/data/
 # Playwright 浏览器持久化数据（含登录态，敏感且机器相关）
 # 覆盖 .browser_data/ 及 .browser_data.*.bak 等变体
 backend/.browser_data*/

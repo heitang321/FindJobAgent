@@ -1,1 +1,1 @@
-"""Private implementation modules for the resume structuring tool."""
+"""简历结构化工具的私有实现模块。"""

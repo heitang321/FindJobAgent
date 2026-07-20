@@ -1,1 +1,1 @@
-"""Resume analysis, job matching, and optimization agents."""
+"""简历分析、岗位匹配和简历优化 Agent。"""

@@ -1,1 +1,1 @@
-"""Application model clients and adapters."""
+"""应用模型客户端和适配器。"""

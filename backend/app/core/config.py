@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 天
 
+    # ===== 登录注册 / 邮箱验证码 =====
+    AUTH_LOCAL_USER_STORE: str = "data/auth_users.json"
+    AUTH_VERIFICATION_EXPIRE_SECONDS: int = 300
+    AUTH_VERIFICATION_RESEND_SECONDS: int = 60
+    AUTH_VERIFICATION_CODE_LENGTH: int = 6
+    AUTH_EMAIL_SEND_ENABLED: bool = True
+    AUTH_DEBUG_RETURN_CODE: bool = False
+    EMAIL_HOST: str = "smtp.qq.com"
+    EMAIL_PORT: int = 465
+    EMAIL_FROM: str = ""
+    EMAIL_PASSWORD: str = ""
+
     # ===== 简历上传 =====
     # 上传文件的存储目录（相对于 backend 目录）
     RESUME_UPLOAD_DIR: str = "uploads/resumes"

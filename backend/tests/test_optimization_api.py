@@ -1,4 +1,4 @@
-"""Agent 3 FastAPI endpoint tests."""
+"""Agent 3 FastAPI 接口测试。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Pydantic contracts for Agent 3 resume optimization."""
+"""Agent 3 简历优化的 Pydantic 数据契约。"""
 
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ ChangeType = Literal["added", "modified", "removed"]
 
 
 class SectionChange(BaseModel):
-    """One explainable change made to a resume section."""
+    """一次可解释的简历段落修改。"""
 
     type: ChangeType
     description: str
 
 
 class SectionRewriteRequest(BaseModel):
-    """Input contract for one independent section rewrite."""
+    """单个独立段落改写的输入契约。"""
 
     section_type: SectionType
     original_content: str
@@ -35,7 +35,7 @@ class SectionRewriteRequest(BaseModel):
 
 
 class SectionRewriteResult(BaseModel):
-    """Structured output returned by Tool 3.1."""
+    """Tool 3.1 返回的结构化输出。"""
 
     section_type: SectionType
     original_content: str
@@ -45,7 +45,7 @@ class SectionRewriteResult(BaseModel):
 
 
 class DiffSpan(BaseModel):
-    """A highlightable text fragment for the comparison view."""
+    """对比视图中可高亮的一段文本。"""
 
     type: Literal["equal", "added", "modified", "removed"]
     original_text: str = ""
@@ -53,7 +53,7 @@ class DiffSpan(BaseModel):
 
 
 class SectionDiff(BaseModel):
-    """Original/optimized comparison for one section occurrence."""
+    """单个段落实例的原文与优化后对比。"""
 
     section_type: str
     section_index: int
@@ -66,13 +66,13 @@ class SectionDiff(BaseModel):
 
 
 class DiffReport(BaseModel):
-    """Frontend-ready comparison report produced by Tool 3.4."""
+    """Tool 3.4 生成的前端可直接渲染的对比报告。"""
 
     sections: list[SectionDiff] = Field(default_factory=list)
 
 
 class OptimizationSummary(BaseModel):
-    """Aggregate counts and labels shown above the comparison view."""
+    """对比视图顶部展示的汇总数量与标签。"""
 
     rewritten_sections: list[str] = Field(default_factory=list)
     unchanged_sections: list[str] = Field(default_factory=list)

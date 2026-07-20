@@ -1,4 +1,4 @@
-"""Layout-preserving DOCX editing tests for Agent 3."""
+"""Agent 3 保留版式的 DOCX 编辑测试。"""
 
 from __future__ import annotations
 
