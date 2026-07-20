@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-LLMCallable = Callable[[str], str | dict[str, Any]]
+# 所有 LLM callable 现在都是 async（返回 Awaitable）。
+# 注入方需要写成 `async def llm(prompt) -> str | dict: ...`，
+# 这是 LangGraph async 节点 / asyncio.gather 并发的前提。
+LLMCallable = Callable[
+    [str],
+    str | dict[str, Any] | Awaitable[str | dict[str, Any]],
+]
 
 
 def build_resume_structure_prompt(raw_text: str) -> str:
@@ -76,14 +82,27 @@ def parse_llm_response(response: str | dict[str, Any]) -> dict[str, Any]:
     return json.loads(text)
 
 
-def configured_llm(prompt: str) -> str:
-    """调用已配置的 OpenAI 兼容模型。"""
-    from app.model.openai_compatible import chat_completion
+async def configured_llm(prompt: str) -> str:
+    """Call the configured model via LangChain ChatOpenAI (native async).
 
-    return chat_completion(
-        prompt,
-        system_prompt=(
-            "你是资深招聘顾问和简历优化专家。你必须输出严格 JSON，"
-            "并给出详细、具体、可执行的中文简历分析。"
+    之前走 app.model.openai_compatible.chat_completion（httpx 同步），
+    重构 LangGraph 时改为 ChatOpenAI.ainvoke()，避开 sync API 与 asyncio
+    事件循环冲突的问题。返回 model.content（str），与原 httpx 路径的输出
+    签名一致，parse_llm_response 不需要改动。
+    """
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from app.model.model import MyModel
+
+    model = MyModel.get_model()
+    messages = [
+        SystemMessage(
+            content=(
+                "你是资深招聘顾问和简历优化专家。你必须输出严格 JSON，"
+                "并给出详细、具体、可执行的中文简历分析。"
+            )
         ),
-    )
+        HumanMessage(content=prompt),
+    ]
+    response = await model.ainvoke(messages)
+    return response.content

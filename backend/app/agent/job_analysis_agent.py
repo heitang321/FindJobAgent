@@ -10,6 +10,10 @@
 
 Tool 2.1 和 2.2 是确定性操作，2.3 和 2.4 调用 LLM。
 Agent 1 产出的 structured_resume 在 Tool 2.4 被消费。
+
+重构后所有节点都是 async def：2.1 用 async_playwright，2.3/2.4 走
+ChatOpenAI.ainvoke()。配合 LangGraph 的 async 图和 .ainvoke() 使用，
+真正实现 A1‖A2前缀 并发（asyncio.gather，无需 ThreadPoolExecutor）。
 """
 from __future__ import annotations
 
@@ -28,23 +32,26 @@ StateCallback = Callable[[WorkflowState], None]
 # ===== LangGraph 节点函数 =====
 
 
-def fetch_jd_node(state: WorkflowState, jd_url: str) -> WorkflowState:
+async def fetch_jd_node(state: WorkflowState, jd_url: str) -> WorkflowState:
     """Tool 2.1: 从 URL 抓取 JD 页面文本，写入 state["jd_raw_text"]。
 
     使用 CDP 连接真实 Edge 浏览器，绕过 EdgeOne 机器人检测。
     前置条件：已通过 login 脚本登录招聘网站。
+
+    重构后是 async：fetch_jd_from_url 用 async_playwright。
     """
-    page_text = fetch_jd_from_url(jd_url)
+    page_text = await fetch_jd_from_url(jd_url)
     state["jd_raw_text"] = page_text
     state["jd_source_type"] = "url"
     return state
 
 
-def extract_jd_node(state: WorkflowState) -> WorkflowState:
+async def extract_jd_node(state: WorkflowState) -> WorkflowState:
     """Tool 2.2: 从页面文本提取 JD 正文，覆写 state["jd_raw_text"]。
 
     用文本标记（"职位描述"→"工作地点"）定位 JD 边界，
     去除导航栏、相似职位、公司介绍等噪音，压缩约 80%。
+    纯函数操作，无需 async，但保持 async def 签名以与其它节点一致。
     """
     page_text = state.get("jd_raw_text", "")
     jd_text = extract_jd_text(page_text)
@@ -52,24 +59,25 @@ def extract_jd_node(state: WorkflowState) -> WorkflowState:
     return state
 
 
-def structure_jd_node(state: WorkflowState) -> WorkflowState:
+async def structure_jd_node(state: WorkflowState) -> WorkflowState:
     """Tool 2.3: LLM 结构化 JD，写入 state["job_requirements"]。
 
     将 JD 正文转为 JobRequirement 结构化对象（职位名、薪资、技能、
     岗位职责、任职要求），通过 with_structured_output + function calling
-    约束输出格式。
+    约束输出格式。重构后是真正 async：await chain.ainvoke()。
     """
     jd_text = state.get("jd_raw_text", "")
-    job_req = extract_requirements(jd_text)
+    job_req = await extract_requirements(jd_text)
     state["job_requirements"] = job_req.model_dump()
     return state
 
 
-def match_resume_node(state: WorkflowState) -> WorkflowState:
+async def match_resume_node(state: WorkflowState) -> WorkflowState:
     """Tool 2.4: LLM 简历-岗位匹配，写入 state["match_result"] 和 state["gap_report"]。
 
     消费 Agent 1 产出的 structured_resume 和节点 2.3 的 job_requirements，
     用 LLM 做语义级匹配，产出匹配度和 gap 分析。
+    重构后是真正 async：await chain.ainvoke()。
     """
     structured_resume = state.get("structured_resume", {})
     job_req_dict = state.get("job_requirements", {})
@@ -78,7 +86,7 @@ def match_resume_node(state: WorkflowState) -> WorkflowState:
     from app.tools.requirement_extractor import JobRequirement
     job_req = JobRequirement(**job_req_dict)
 
-    analysis = analyze_match(structured_resume, job_req)
+    analysis = await analyze_match(structured_resume, job_req)
     match_result, gap_report = split_to_workflow_fields(analysis)
     state["match_result"] = match_result
     state["gap_report"] = gap_report
@@ -94,12 +102,15 @@ class JobAnalysisAgent:
     线性执行四个 Tool 节点，通过 WorkflowState 传递数据。
     Agent 1 的 structured_resume 在 Tool 2.4 被消费。
 
+    重构后所有方法都是 async：run / prepare_jd / match_resume 都 await 调用
+    async 节点。配合 LangGraph async 图和 .ainvoke() 使用。
+
     用法::
 
         agent = JobAnalysisAgent(on_state_update=persist_fn)
         state = initial_workflow_state(task_id, file_path)
         # ... Agent 1 先运行，填充 structured_resume ...
-        state = agent.run(state, jd_url="https://www.zhaopin.com/jobdetail/...")
+        state = await agent.run(state, jd_url="https://www.zhaopin.com/jobdetail/...")
     """
 
     def __init__(self, on_state_update: StateCallback | None = None):
@@ -110,7 +121,7 @@ class JobAnalysisAgent:
         if self.on_state_update:
             self.on_state_update(state)
 
-    def run(self, state: WorkflowState, jd_url: str) -> WorkflowState:
+    async def run(self, state: WorkflowState, jd_url: str) -> WorkflowState:
         """执行完整的岗位分析流程：2.1 → 2.2 → 2.3 → 2.4。
 
         Args:
@@ -127,19 +138,19 @@ class JobAnalysisAgent:
             self._publish(state)
 
             # Tool 2.1: 从 URL 抓取 JD 页面
-            fetch_jd_node(state, jd_url)
+            await fetch_jd_node(state, jd_url)
             self._publish(state)
 
             # Tool 2.2: 提取 JD 正文（去噪）
-            extract_jd_node(state)
+            await extract_jd_node(state)
             self._publish(state)
 
             # Tool 2.3: LLM 结构化 JD
-            structure_jd_node(state)
+            await structure_jd_node(state)
             self._publish(state)
 
             # Tool 2.4: LLM 简历-岗位匹配
-            match_resume_node(state)
+            await match_resume_node(state)
             self._publish(state)
 
             state["current_stage"] = "done"
@@ -152,14 +163,83 @@ class JobAnalysisAgent:
             self._publish(state)
             return state
 
+    async def prepare_jd(self, state: WorkflowState, jd_url: str) -> WorkflowState:
+        """只跑 Tool 2.1+2.2+2.3：抓 JD → 提取正文 → LLM 结构化 JD。
 
-def run_job_analysis_agent(
+        这三步完全不依赖 Agent 1 的 structured_resume，只依赖 jd_url，
+        因此可以和 Agent 1 并行执行，是流程并行化的关键切入点。
+        重构后是 async：配合 LangGraph 的并发节点（A1 ‖ A2 前缀）使用。
+
+        写入 state 的字段：
+            - jd_raw_text（Tool 2.2 覆写为去噪后的 JD 正文）
+            - jd_source_type = "url"
+            - job_requirements（LLM 结构化的 JobRequirement dict）
+
+        Args:
+            state: WorkflowState，不需要任何前置产出
+            jd_url: 招聘职位详情页 URL
+
+        Returns:
+            更新后的 state（含 jd_raw_text 和 job_requirements，
+            但尚无 match_result / gap_report，等 match_resume 补齐）
+        """
+        try:
+            state["current_stage"] = "job_analysis"
+            state["error"] = None
+            self._publish(state)
+
+            # Tool 2.1: 从 URL 抓取 JD 页面
+            await fetch_jd_node(state, jd_url)
+            self._publish(state)
+
+            # Tool 2.2: 提取 JD 正文（去噪）
+            await extract_jd_node(state)
+            self._publish(state)
+
+            # Tool 2.3: LLM 结构化 JD
+            await structure_jd_node(state)
+            self._publish(state)
+            return state
+
+        except Exception as exc:
+            state["current_stage"] = "error"
+            state["error"] = str(exc)
+            self._publish(state)
+            return state
+
+    async def match_resume(self, state: WorkflowState) -> WorkflowState:
+        """只跑 Tool 2.4：LLM 简历-岗位语义匹配 + gap 分析。
+
+        前置条件（由调用方保证，本方法不检查）：
+            - state["structured_resume"] 已由 Agent 1 写入
+            - state["job_requirements"] 已由 prepare_jd 写入
+
+        写入 state 的字段：
+            - match_result（含 overall_score / matched_skills / missing_skills）
+            - gap_report（含 critical_gaps）
+            - current_stage = "done"（成功）或 "error"（失败）
+        """
+        try:
+            await match_resume_node(state)
+            self._publish(state)
+            state["current_stage"] = "done"
+            self._publish(state)
+            return state
+
+        except Exception as exc:
+            state["current_stage"] = "error"
+            state["error"] = str(exc)
+            self._publish(state)
+            return state
+
+
+async def run_job_analysis_agent(
     state: WorkflowState,
     jd_url: str,
     on_state_update: StateCallback | None = None,
 ) -> WorkflowState:
     """便捷函数：创建 JobAnalysisAgent 并运行。
 
-    供 services 层和测试使用。
+    供 services 层和测试使用。重构后是 async。
     """
-    return JobAnalysisAgent(on_state_update=on_state_update).run(state, jd_url)
+    return await JobAnalysisAgent(on_state_update=on_state_update).run(state, jd_url)

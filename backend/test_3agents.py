@@ -10,7 +10,7 @@ import sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ".")
 
-from app.schema.workflow_state import initial_workflow_state
+from app.schemas.workflow_state import initial_workflow_state
 from app.agent.resume_analysis_agent import ResumeAnalysisAgent
 from app.tools.jd_extractor import extract_jd_text
 from app.tools.requirement_extractor import extract_requirements

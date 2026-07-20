@@ -1,10 +1,11 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Upload as UploadIcon, Loading } from '@element-plus/icons-vue'
+import { Upload as UploadIcon, Loading, Search } from '@element-plus/icons-vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { checkHealth } from '@/api'
 import request from '@/api/request'
+import JobCard from '@/components/JobCard.vue'
 
 const wf = useWorkflowStore()
 const healthStatus = ref('检测中...')
@@ -84,7 +85,7 @@ async function handleUpload(file) {
   try {
     await wf.upload(f)
     ElMessage.success('简历已上传，正在分析...')
-  } catch (e) {}
+  } catch {}
   return false
 }
 
@@ -93,14 +94,29 @@ async function submitJd() {
   try {
     await wf.submitJob(jdUrl.value.trim())
     ElMessage.success('岗位分析完成')
-  } catch (e) {}
+  } catch {}
+}
+
+// 自动推荐岗位：调后端 /job/{taskId}/search，用简历 skills 推导关键词
+async function handleSearchJobs() {
+  try {
+    await wf.searchJobs()
+    ElMessage.success(`已检索到 ${wf.jobSearchResults.length} 个岗位，请选择一个`)
+  } catch {}
+}
+
+// 选中岗位卡片：自动填 URL 到输入框，用户可继续点"提交分析"
+function handleSelectCard(card) {
+  wf.selectJobCard(card)
+  jdUrl.value = card.url
+  ElMessage.success(`已选择：${card.title}，URL 已填入，可点"提交分析"继续`)
 }
 
 async function startOptimize() {
   try {
     await wf.optimize()
     ElMessage.success('优化任务已启动')
-  } catch (e) {}
+  } catch {}
 }
 
 async function download() {
@@ -112,8 +128,6 @@ async function download() {
   a.click()
   window.URL.revokeObjectURL(url)
 }
-
-function reset() { jdUrl.value = ''; wf.reset() }
 
 async function checkApi() {
   try {

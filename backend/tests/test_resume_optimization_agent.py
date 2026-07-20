@@ -19,7 +19,7 @@ if str(BACKEND_ROOT) not in sys.path:
 from app.agent.resume_optimization_agent import (  # noqa: E402
     run_resume_optimization_agent,
 )
-from app.schema.workflow_state import initial_workflow_state  # noqa: E402
+from app.schemas.workflow_state import initial_workflow_state  # noqa: E402
 from app.tools.diff_generator import diff_generator  # noqa: E402
 from app.tools.doc_generator import generate_resume_document  # noqa: E402
 from app.tools.section_rewriter import (  # noqa: E402

@@ -1,19 +1,19 @@
-"""应用配置管理
+"""应用配置管理。"""
 
-使用 pydantic-settings 从环境变量 / .env 文件读取配置。
-"""
+from __future__ import annotations
+
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = BACKEND_ROOT.parent
 
 
 class Settings(BaseSettings):
-    """应用配置，字段对应 .env 文件中的变量名。"""
+    """从项目根目录或 backend/.env 读取配置。"""
 
     model_config = SettingsConfigDict(
         env_file=(PROJECT_ROOT / ".env", BACKEND_ROOT / ".env"),
@@ -22,26 +22,27 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ===== 应用基础 =====
+    # 应用基础
     APP_NAME: str = "FindJobAgent"
     DEBUG: bool = True
+    TESTING: bool = False
     API_V1_PREFIX: str = "/api/v1"
 
-    # ===== 数据库 (MySQL) =====
+    # MySQL 持久化。也可以通过 DATABASE_URL 覆盖完整同步连接地址。
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: int = 3306
     MYSQL_USER: str = "root"
     MYSQL_PASSWORD: str = ""
     MYSQL_DB: str = "job_agent"
-    # 自动拼接同步连接 URL: mysql+pymysql://user:pass@host:port/db
     DATABASE_URL: str = ""
 
-    # ===== JWT 认证（预留）=====
+    # JWT 认证
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 天
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
-    # ===== 登录注册 / 邮箱验证码 =====
+    # 登录注册 / 邮箱验证码
+    AUTH_LOCAL_USER_STORE: str = "data/auth_users.json"
     AUTH_VERIFICATION_EXPIRE_SECONDS: int = 300
     AUTH_VERIFICATION_RESEND_SECONDS: int = 60
     AUTH_VERIFICATION_CODE_LENGTH: int = 6
@@ -52,12 +53,11 @@ class Settings(BaseSettings):
     EMAIL_FROM: str = ""
     EMAIL_PASSWORD: str = ""
 
-    # ===== 简历上传 =====
-    # 上传文件的存储目录（相对于 backend 目录）
+    # 简历上传
     RESUME_UPLOAD_DIR: str = "uploads/resumes"
+    RESUME_MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024
 
-    # ===== AI 模型（OpenAI 兼容接口）=====
-    # 例如 DeepSeek: AI_BASE_URL=https://api.deepseek.com/v1, AI_MODEL=deepseek-chat
+    # AI 模型（OpenAI 兼容接口）
     AI_API_KEY: str = ""
     AI_BASE_URL: str = ""
     AI_MODEL: str = ""
@@ -65,27 +65,33 @@ class Settings(BaseSettings):
     AI_TIMEOUT_SECONDS: int = 60
     AI_TEMPERATURE: float = 0.2
 
-    # ===== Agent 3 简历优化 =====
+    # Agent 3
     OPTIMIZATION_OUTPUT_DIR: str = "outputs/optimized_resumes"
     OPTIMIZATION_MAX_WORKERS: int = 4
 
-    # ===== CORS =====
-    # 前端开发服务器地址，允许多个来源用逗号分隔
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # 招聘网站抓取白名单
+    JOB_ALLOWED_HOSTS: list[str] = ["zhaopin.com"]
+
+    # CORS
+    BACKEND_CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """获取配置单例，lru_cache 保证全局只读取一次 .env。"""
-    s = Settings()
-    # 如果未显式配置 DATABASE_URL，则从 MYSQL_* 字段自动拼接
-    if not s.DATABASE_URL:
-        s.DATABASE_URL = (
-            f"mysql+pymysql://{s.MYSQL_USER}:{s.MYSQL_PASSWORD}"
-            f"@{s.MYSQL_HOST}:{s.MYSQL_PORT}/{s.MYSQL_DB}"
+    """获取配置单例并补齐默认 MySQL 同步连接地址。"""
+    configured = Settings()
+    if not configured.DATABASE_URL:
+        user = quote_plus(configured.MYSQL_USER)
+        password = quote_plus(configured.MYSQL_PASSWORD)
+        configured.DATABASE_URL = (
+            f"mysql+pymysql://{user}:{password}"
+            f"@{configured.MYSQL_HOST}:{configured.MYSQL_PORT}/{configured.MYSQL_DB}"
             "?charset=utf8mb4"
         )
-    return s
+    return configured
 
 
 settings = get_settings()

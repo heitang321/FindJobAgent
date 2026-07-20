@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from inspect import isawaitable
 from typing import Any
 
 from app.tools._resume_structurer.fallback import fallback_structure
@@ -20,7 +21,7 @@ from app.tools._resume_structurer.result import normalize_result
 __all__ = ["LLMCallable", "build_resume_structure_prompt", "resume_structurer"]
 
 
-def resume_structurer(
+async def resume_structurer(
     raw_text: str,
     llm: LLMCallable | None = None,
     use_configured_llm: bool = False,
@@ -30,6 +31,9 @@ def resume_structurer(
     如果传入 ``llm``，则优先使用它。否则只有当 ``use_configured_llm`` 为 true 时
     才使用已配置模型。模型不可用、响应无效或模型报错时，会回退到确定性解析，
     同时将错误保存在 ``evaluation.llm_error`` 中。
+
+    配置模型使用原生异步调用；测试和扩展代码也可以注入同步 callable，
+    本函数会自动识别返回值是否可等待。
     """
     model = llm
     if model is None and use_configured_llm:
@@ -40,6 +44,8 @@ def resume_structurer(
 
     try:
         response = model(build_resume_structure_prompt(raw_text))
+        if isawaitable(response):
+            response = await response
         result = normalize_result(parse_llm_response(response))
         result["evaluation"]["analysis_source"] = (
             result["evaluation"]["analysis_source"] or "llm"
