@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
 
 const request = axios.create({
   // 通过 Vite 代理转发请求，开发环境直接用相对路径

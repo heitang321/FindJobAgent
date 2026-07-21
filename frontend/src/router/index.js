@@ -10,7 +10,13 @@ const routes = [
         path: '',
         name: 'Home',
         component: () => import('@/views/Home.vue'),
-        meta: { title: '首页', requiresAuth: true },
+        meta: { title: '智能问答', requiresAuth: true },
+      },
+      {
+        path: 'optimize',
+        name: 'ResumeOptimize',
+        component: () => import('@/views/ResumeOptimize.vue'),
+        meta: { title: '简历优化', requiresAuth: true },
       },
       {
         path: 'history',

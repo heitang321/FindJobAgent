@@ -1,9 +1,10 @@
 <script setup>
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const router = useRouter()
+const route = useRoute()
 
 function handleLogout() {
   userStore.logout()
@@ -25,8 +26,9 @@ function handleLogout() {
         </router-link>
 
         <div class="nav-menu" v-if="userStore.token">
-          <router-link to="/" class="nav-link" active-class="active">首页</router-link>
-          <router-link to="/history" class="nav-link" active-class="active">历史记录</router-link>
+          <router-link to="/" class="nav-link" :class="{ active: route.path === '/' }">智能问答</router-link>
+          <router-link to="/optimize" class="nav-link" :class="{ active: route.path.startsWith('/optimize') }">简历优化</router-link>
+          <router-link to="/history" class="nav-link" :class="{ active: route.path.startsWith('/history') }">历史记录</router-link>
         </div>
 
         <div class="nav-right">

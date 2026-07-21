@@ -71,3 +71,12 @@ async def get_resume_analysis(task_id: str, user: CurrentUser) -> dict:
         "job_search_results": state.get("job_search_results", []),
         "selected_jd_url": state.get("selected_jd_url", ""),
     }
+
+
+@router.delete("/{task_id}", summary="删除指定的简历任务记录")
+async def delete_resume_task(task_id: str, user: CurrentUser) -> dict:
+    """删除简历任务及其关联文件，校验用户归属。"""
+    deleted = await asyncio.to_thread(resume_task_store.delete, task_id, user["id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Resume task not found or no permission")
+    return {"task_id": task_id, "deleted": True}

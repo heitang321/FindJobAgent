@@ -173,6 +173,34 @@ class MySQLResumeTaskStore:
             result.append(item)
         return result
 
+    def delete(self, task_id: str, user_id: str) -> bool:
+        """删除指定任务，校验用户归属。返回是否删除成功。"""
+        import shutil
+        from pathlib import Path
+
+        with SessionLocal() as database:
+            task = database.get(ResumeTask, task_id)
+            if task is None or task.user_id != user_id:
+                return False
+            # 删除上传的简历文件
+            if task.file_path:
+                try:
+                    file_dir = Path(task.file_path).parent
+                    if file_dir.exists():
+                        shutil.rmtree(file_dir, ignore_errors=True)
+                except Exception:
+                    pass
+            if task.output_file_path:
+                try:
+                    out_file = Path(task.output_file_path)
+                    if out_file.exists():
+                        out_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            database.delete(task)
+            database.commit()
+            return True
+
 
 class InMemoryResumeTaskStore:
     """测试使用的线程安全任务存储。"""
@@ -204,6 +232,14 @@ class InMemoryResumeTaskStore:
                 if state.get("user_id") == user_id
             ]
         return [_history_item(state) for state in states[:limit]]
+
+    def delete(self, task_id: str, user_id: str) -> bool:
+        with self._lock:
+            state = self._tasks.get(task_id)
+            if state is None or state.get("user_id") != user_id:
+                return False
+            del self._tasks[task_id]
+            return True
 
 
 resume_task_store = (

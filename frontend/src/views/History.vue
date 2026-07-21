@@ -1,8 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { getResumeHistory } from '@/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
+import 'element-plus/es/components/message-box/style/css'
+import { Delete } from '@element-plus/icons-vue'
+import { getResumeHistory, deleteResumeTask } from '@/api'
 
 const router = useRouter()
 const tasks = ref([])
@@ -41,6 +44,25 @@ function formatTime(iso) {
 
 function viewTask(taskId) {
   router.push({ name: 'OptimizationResult', params: { taskId } })
+}
+
+async function handleDeleteTask(taskId) {
+  try {
+    await ElMessageBox.confirm('确定删除这条简历任务记录吗？相关文件也会被删除。', '提示', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return // 用户取消
+  }
+  try {
+    await deleteResumeTask(taskId)
+    ElMessage.success('已删除')
+    loadHistory()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || e.message || '删除失败')
+  }
 }
 
 function startNew() {
@@ -142,12 +164,17 @@ onMounted(loadHistory)
             </svg>
             {{ formatTime(task.created_at) }}
           </span>
-          <span class="card-action">
-            查看
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
+          <div class="card-actions">
+            <button class="card-delete-btn" @click.stop="handleDeleteTask(task.task_id)">
+              <el-icon><Delete /></el-icon>
+            </button>
+            <span class="card-action">
+              查看
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -378,6 +405,17 @@ onMounted(loadHistory)
   font-weight: 500;
   transition: gap 0.3s var(--ease-spring);
 }
+
+.card-actions { display: flex; align-items: center; gap: 8px; }
+
+.card-delete-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  border: none; border-radius: 8px;
+  background: transparent; color: var(--apple-gray-4);
+  cursor: pointer; transition: all 0.2s;
+}
+.card-delete-btn:hover { background: rgba(255, 59, 48, 0.1); color: #ff3b30; }
 
 .task-card:hover .card-action {
   gap: 6px;

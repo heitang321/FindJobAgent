@@ -19,6 +19,9 @@ export const loginWithEmail = (payload) => request.post('/auth/login', payload)
 /** 获取当前用户的简历任务历史列表 */
 export const getResumeHistory = () => request.get('/resume/history')
 
+/** 删除指定的简历任务记录 */
+export const deleteResumeTask = (taskId) => request.delete(`/resume/${taskId}`)
+
 /** 上传并保存简历；Agent 1 在提交 JD 或自动推荐时按需执行 */
 export const uploadResume = (file) => {
   const form = new FormData()
@@ -53,6 +56,24 @@ export const triggerOptimization = (taskId) => request.post(`/optimize/${taskId}
 export const getOptimizationResult = (taskId) =>
   request.get(`/optimize/${taskId}/result`)
 
+/** 智能问答（支持会话持久化） */
+export const sendChat = (question, context = '', sessionId = null) =>
+  request.post('/chat/chat', { question, context, session_id: sessionId })
+
+/** 获取用户的聊天会话列表 */
+export const getChatSessions = () =>
+  request.get('/chat/sessions')
+
+/** 获取指定会话的所有消息 */
+export const getChatMessages = (sessionId) =>
+  request.get(`/chat/sessions/${sessionId}/messages`)
+
+/** 删除指定会话 */
+export const deleteChatSession = (sessionId) =>
+  request.delete(`/chat/sessions/${sessionId}`)
+
 /** 下载优化后的 Word 简历 */
 export const downloadOptimizedResume = (taskId) =>
   request.get(`/optimize/${taskId}/download`, { responseType: 'blob' })
+
+
