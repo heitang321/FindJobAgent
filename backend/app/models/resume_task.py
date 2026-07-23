@@ -78,6 +78,9 @@ class ResumeTask(Base):
     optimization_summary: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False, default=dict
     )
+    optimization_versions: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
 
     def __repr__(self) -> str:
         return f"<ResumeTask(task_id={self.task_id!r}, stage={self.current_stage!r})>"

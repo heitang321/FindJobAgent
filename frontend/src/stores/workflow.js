@@ -16,7 +16,7 @@ import {
  * 阶段流转：
  *   idle → uploading → job_input（待用户提交 JD URL 或自动推荐岗位）
  *        → job_analyzing（同步等 Agent2）
- *        → optimizing（轮询 Agent3）
+ *        → optimizing（轮询 Agent3，生成三个版本）
  *        → done / error
  *
  * job_input 阶段有两个入口：
@@ -37,10 +37,20 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const resumeEvaluation = ref(null)
 
   // ===== 岗位搜索（job_input 阶段的自动推荐分支）=====
-  const jobSearchResults = ref([]) // 搜索结果卡片列表
+  const jobSearchResults = ref([]) // 当前页卡片列表
   const searchKeywords = ref('') // 实际使用的搜索关键词
   const searchingJobs = ref(false) // 是否正在搜索
   const selectedJobCard = ref(null) // 用户选中的卡片对象
+
+  // 筛选+分页状态
+  const searchTotal = ref(0) // 筛选后总数
+  const searchPage = ref(1) // 当前页码
+  const searchPageSize = ref(10) // 每页条数
+  const searchTotalPages = ref(1) // 总页数
+  const searchFilterCity = ref('')
+  const searchFilterExperience = ref('')
+  const searchFilterEducation = ref('')
+  const searchFilterKeyword = ref('')
 
   // ===== Agent 2 产出 =====
   const jobRequirements = ref(null)
@@ -53,6 +63,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const optimizationSummary = ref(null)
   const downloadReady = ref(false)
 
+  // ===== 多版本优化 =====
+  const optimizationVersions = ref([]) // [{strategy, label, description, optimized_resume, diff_report, optimization_summary, download_ready}]
+  const selectedVersion = ref('balanced') // 当前查看的版本 tab
+
   // ===== 轮询控制 =====
   let optimizePollTimer = null
 
@@ -62,6 +76,34 @@ export const useWorkflowStore = defineStore('workflow', () => {
     ['uploading', 'analyzing', 'job_analyzing', 'optimizing'].includes(stage.value),
   )
   const hasSearchResults = computed(() => jobSearchResults.value.length > 0)
+
+  // 当前选中版本的 diff report
+  const currentVersionDiff = computed(() => {
+    if (!optimizationVersions.value.length) return diffReport.value
+    const v = optimizationVersions.value.find((v) => v.strategy === selectedVersion.value)
+    return v?.diff_report || null
+  })
+
+  // 当前选中版本的 summary
+  const currentVersionSummary = computed(() => {
+    if (!optimizationVersions.value.length) return optimizationSummary.value
+    const v = optimizationVersions.value.find((v) => v.strategy === selectedVersion.value)
+    return v?.optimization_summary || null
+  })
+
+  // 当前选中版本是否可下载
+  const currentVersionDownloadReady = computed(() => {
+    if (!optimizationVersions.value.length) return downloadReady.value
+    const v = optimizationVersions.value.find((v) => v.strategy === selectedVersion.value)
+    return v?.download_ready || false
+  })
+
+  // 当前选中版本的错误信息
+  const currentVersionError = computed(() => {
+    if (!optimizationVersions.value.length) return ''
+    const v = optimizationVersions.value.find((v) => v.strategy === selectedVersion.value)
+    return v?.error || ''
+  })
 
   // ===== 内部工具 =====
   function clearTimers() {
@@ -101,6 +143,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     diffReport.value = null
     optimizationSummary.value = null
     downloadReady.value = false
+    optimizationVersions.value = []
+    selectedVersion.value = 'balanced'
   }
 
   // ===== 步骤 1：上传简历 =====
@@ -122,14 +166,27 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   // ===== 步骤 2a：自动推荐岗位（job_input 阶段的一个入口）=====
-  async function searchJobs({ keywords = '', city = '' } = {}) {
+  async function searchJobs(params = {}) {
     if (!taskId.value) throw new Error('还没有上传简历')
     searchingJobs.value = true
     error.value = ''
     try {
-      const data = await searchJobsApi(taskId.value, { keywords, city })
+      const data = await searchJobsApi(taskId.value, {
+        keywords: params.keywords || '',
+        city: params.city || '',
+        filterCity: params.filterCity ?? searchFilterCity.value,
+        filterExperience: params.filterExperience ?? searchFilterExperience.value,
+        filterEducation: params.filterEducation ?? searchFilterEducation.value,
+        filterKeyword: params.filterKeyword ?? searchFilterKeyword.value,
+        page: params.page ?? searchPage.value,
+        pageSize: params.pageSize ?? searchPageSize.value,
+      })
       jobSearchResults.value = data.job_search_results || []
       searchKeywords.value = data.keywords || ''
+      searchTotal.value = data.total || 0
+      searchPage.value = data.page || 1
+      searchPageSize.value = data.page_size || 10
+      searchTotalPages.value = data.total_pages || 1
       selectedJobCard.value = null
       await syncResumeAnalysis()
       return data
@@ -139,6 +196,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
     } finally {
       searchingJobs.value = false
     }
+  }
+
+  // 重置筛选条件
+  function resetSearchFilters() {
+    searchFilterCity.value = ''
+    searchFilterExperience.value = ''
+    searchFilterEducation.value = ''
+    searchFilterKeyword.value = ''
+    searchPage.value = 1
   }
 
   // 选中一个岗位卡片：自动填 URL，进入提交分析流程
@@ -174,6 +240,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     diffReport.value = null
     optimizationSummary.value = null
     downloadReady.value = false
+    optimizationVersions.value = []
+    selectedVersion.value = 'balanced'
     stage.value = 'optimizing'
     try {
       await triggerOptimization(taskId.value)
@@ -201,6 +269,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           ? data.optimization_summary
           : null
         downloadReady.value = Boolean(data.download_ready)
+        optimizationVersions.value = data.optimization_versions || []
 
         if (data.current_stage !== 'optimizing') {
           if (optimizePollTimer) {
@@ -229,6 +298,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }, 1500)
   }
 
+  // 切换查看的版本
+  function selectVersion(strategy) {
+    selectedVersion.value = strategy
+  }
+
   return {
     // state
     taskId,
@@ -247,10 +321,27 @@ export const useWorkflowStore = defineStore('workflow', () => {
     diffReport,
     optimizationSummary,
     downloadReady,
+    optimizationVersions,
+    selectedVersion,
     // computed
     matchScore,
     isRunning,
     hasSearchResults,
+    // 筛选+分页
+    searchTotal,
+    searchPage,
+    searchPageSize,
+    searchTotalPages,
+    searchFilterCity,
+    searchFilterCity,
+    searchFilterExperience,
+    searchFilterEducation,
+    searchFilterKeyword,
+    resetSearchFilters,
+    currentVersionDiff,
+    currentVersionSummary,
+    currentVersionDownloadReady,
+    currentVersionError,
     // actions
     upload,
     searchJobs,
@@ -258,5 +349,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
     submitJob,
     optimize,
     reset,
+    selectVersion,
   }
 })

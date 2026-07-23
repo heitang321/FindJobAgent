@@ -242,12 +242,25 @@ class ChatAgent:
                 "data": f"岗位搜索暂时不可用：{error_msg}。请稍后重试，或前往简历优化页面使用自动推荐功能。",
             }
 
+    # 指代词列表：如果问题中包含这些词 + 岗位名词，说明用户在问已有结果，不是要搜索
+    _REFERENCE_WORDS = (
+        "这些", "这个", "上面", "刚才", "前面", "之前的",
+        "列表", "卡片", "哪个", "第几个", "几个",
+    )
+
     @classmethod
     def _is_job_search(cls, question: str) -> bool:
-        """两段匹配：问题中同时包含搜索动词和岗位名词。"""
+        """两段匹配：问题中同时包含搜索动词和岗位名词。
+
+        但如果包含指代词（这些/上面/刚才等），说明用户在询问已有结果，不算新搜索。
+        """
+        has_reference = any(w in question for w in cls._REFERENCE_WORDS)
         has_verb = any(v in question for v in cls.SEARCH_VERBS)
         has_noun = any(n in question for n in cls.JOB_NOUNS)
         has_keyword = any(kw in question for kw in cls.JOB_SEARCH_KEYWORDS)
+        # 包含指代词时，不触发新搜索（即使有动词+名词）
+        if has_reference:
+            return False
         return has_keyword or (has_verb and has_noun)
 
     @staticmethod
@@ -273,6 +286,73 @@ class ChatAgent:
                 cleaned = cleaned[: -len(suffix)]
                 break
         return cleaned.strip(" ，。、！？?的")
+
+    # ===== 上下文继承 =====
+    # 常见中国城市名（用于判断关键词中是否包含地点）
+    _CITIES = (
+        "北京", "上海", "广州", "深圳", "成都", "杭州", "南京", "武汉",
+        "西安", "重庆", "苏州", "天津", "长沙", "青岛", "大连", "厦门",
+        "福州", "无锡", "合肥", "郑州", "济南", "沈阳", "哈尔滨", "昆明",
+        "贵阳", "南宁", "兰州", "太原", "石家庄", "呼和浩特", "乌鲁木齐",
+        "宁波", "东莞", "佛山", "珠海", "中山", "惠州",
+    )
+    # 岗位类型限定词（追加到已有关键词后面）
+    _JOB_TYPE_QUALIFIERS = (
+        "实习", "全职", "兼职", "远程", "校招", "社招",
+        "应届", "秋招", "春招",
+    )
+
+    @classmethod
+    def _resolve_search_keywords(
+        cls,
+        current_keywords: str,
+        prev_keywords: str = "",
+        prev_city: str = "",
+    ) -> tuple[str, str]:
+        """根据上次搜索上下文补全当前搜索关键词。
+
+        示例：
+        - prev="成都agent开发", current="实习" → ("成都agent开发实习", "")
+        - prev="上海Java", current="Python后端" → ("上海Python后端", "")
+        - prev="北京Python", current="北京Python" → ("北京Python", "")  # 相同不补全
+
+        返回 (resolved_keywords, city) 二元组。
+        """
+        if not prev_keywords:
+            return current_keywords, prev_city
+
+        # 如果当前关键词已经包含上次的核心内容，直接返回
+        if current_keywords and prev_keywords in current_keywords:
+            return current_keywords, prev_city
+
+        # 提取上次搜索中的城市
+        prev_city_in_kw = ""
+        prev_core = prev_keywords
+        for city in cls._CITIES:
+            if city in prev_keywords:
+                prev_city_in_kw = city
+                prev_core = prev_keywords.replace(city, "").strip()
+                break
+
+        # 提取当前关键词中的城市
+        current_has_city = any(city in current_keywords for city in cls._CITIES)
+
+        # 如果当前关键词不含城市，且上次有城市 → 补全城市
+        if prev_city_in_kw and not current_has_city:
+            # 判断当前关键词是否是限定词（实习/全职等）
+            is_qualifier = any(q in current_keywords for q in cls._JOB_TYPE_QUALIFIERS)
+            if is_qualifier:
+                # 限定词直接追加到上次完整关键词后面
+                resolved = f"{prev_keywords}{current_keywords}"
+            else:
+                # 非限定词：城市 + 当前关键词 + 上次核心词
+                resolved = f"{prev_city_in_kw}{current_keywords}"
+                # 如果当前关键词不包含上次核心词，追加
+                if prev_core and prev_core not in current_keywords:
+                    resolved = f"{prev_city_in_kw}{current_keywords}{prev_core}"
+            return resolved.strip(), prev_city_in_kw
+
+        return current_keywords, prev_city_in_kw or prev_city
 
     # ===== 工具方法 =====
     @staticmethod

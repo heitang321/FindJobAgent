@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     MYSQL_DB: str = "job_agent"
     DATABASE_URL: str = ""
 
+    # Redis 缓存（岗位搜索结果缓存 + 会话上下文）
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str = ""
+    REDIS_ENABLED: bool = False  # 未配置时降级跳过缓存
+    JOB_SEARCH_CACHE_TTL: int = 1800  # 岗位搜索缓存 30 分钟
+
     # JWT 认证
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"

@@ -335,10 +335,41 @@ def _insert_fitted_text(
             shape.commit(overlay=True)
             return
         font_size -= 0.25
-    raise ValueError(
-        "Optimized text does not fit the original PDF text region without "
-        "changing the template. Shorten the LLM output and retry."
+
+    # 文本在最小字号仍放不下时，逐步截断文本而不是报错
+    # 这保证激进版等长文本策略不会因 PDF 区域固定而失败
+    text = edit.rewritten_text
+    font_size = minimum_size
+    while len(text) > 20:
+        # 每次截断 15% 文本
+        cut_len = max(10, int(len(text) * 0.85))
+        text = text[:cut_len].rstrip() + "…"
+        shape = page.new_shape()
+        spare_height = shape.insert_textbox(
+            rect,
+            text,
+            fontname=font_name,
+            fontsize=font_size,
+            color=_rgb(edit.color),
+            align=fitz.TEXT_ALIGN_LEFT,
+            lineheight=1.15,
+        )
+        if spare_height >= 0:
+            shape.commit(overlay=True)
+            return
+
+    # 极端情况：区域太小，只写能放下的部分
+    shape = page.new_shape()
+    shape.insert_textbox(
+        rect,
+        text,
+        fontname=font_name,
+        fontsize=font_size,
+        color=_rgb(edit.color),
+        align=fitz.TEXT_ALIGN_LEFT,
+        lineheight=1.15,
     )
+    shape.commit(overlay=True)
 
 
 def apply_resume_pdf_edits(

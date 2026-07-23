@@ -25,6 +25,7 @@ from app.tools.section_rewriter import RewriteLLM, section_rewriter
 from app.core.config import settings
 from app.schemas.optimization import (
     OptimizationSummary,
+    OptimizationStrategy,
     SectionRewriteRequest,
     SectionRewriteResult,
     SectionType,
@@ -235,6 +236,7 @@ def _rewrite_tasks(
     llm: RewriteLLM | None,
     use_configured_llm: bool,
     max_workers: int,
+    strategy: OptimizationStrategy = "balanced",
 ) -> list[tuple[_SectionTask, SectionRewriteResult]]:
     keywords = _job_keywords(job_requirements)
 
@@ -246,6 +248,7 @@ def _rewrite_tasks(
             gap_report=gap_report,
             job_requirements=job_requirements,
             job_keywords=keywords,
+            strategy=strategy,
         )
         return task, section_rewriter(
             request,
@@ -449,11 +452,13 @@ class ResumeOptimizationAgent:
         on_state_update: StateCallback | None = None,
         use_configured_llm: bool = True,
         max_workers: int | None = None,
+        strategy: OptimizationStrategy = "balanced",
     ):
         self.llm = llm
         self.on_state_update = on_state_update
         self.use_configured_llm = use_configured_llm
         self.max_workers = max_workers or settings.OPTIMIZATION_MAX_WORKERS
+        self.strategy = strategy
 
     def _publish(self, state: WorkflowState) -> None:
         if self.on_state_update:
@@ -500,13 +505,15 @@ class ResumeOptimizationAgent:
                 llm=self.llm,
                 use_configured_llm=self.use_configured_llm and self.llm is None,
                 max_workers=self.max_workers,
+                strategy=self.strategy,
             )
             optimized_resume = _merge_rewrites(original_resume, rewritten)
             rewrite_results = [result for _, result in rewritten]
             report = diff_generator(original_resume, optimized_resume, rewrite_results)
 
             destination_dir = Path(output_dir or settings.OPTIMIZATION_OUTPUT_DIR)
-            destination = destination_dir / f"{state['task_id']}_optimized_resume.docx"
+            suffix = f"_{self.strategy}" if self.strategy != "balanced" else ""
+            destination = destination_dir / f"{state['task_id']}_optimized_resume{suffix}.docx"
             output_path = generate_resume_document(
                 optimized_resume,
                 str(destination),
@@ -543,6 +550,7 @@ def run_resume_optimization_agent(
     max_workers: int | None = None,
     output_dir: str | None = None,
     template_path: str | None = None,
+    strategy: OptimizationStrategy = "balanced",
 ) -> WorkflowState:
     """通过单一公开入口运行 Agent 3。"""
     return ResumeOptimizationAgent(
@@ -550,4 +558,5 @@ def run_resume_optimization_agent(
         on_state_update=on_state_update,
         use_configured_llm=use_configured_llm,
         max_workers=max_workers,
+        strategy=strategy,
     ).run(state, output_dir=output_dir, template_path=template_path)

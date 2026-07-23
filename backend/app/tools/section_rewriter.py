@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from app.schemas.optimization import SectionRewriteRequest, SectionRewriteResult
+from app.schemas.optimization import STRATEGY_DESCRIPTIONS, STRATEGY_LABELS, SectionRewriteRequest, SectionRewriteResult
 
 
 RewriteLLM = Callable[[str], str | dict[str, Any]]
@@ -91,20 +91,52 @@ _SECTION_GUIDANCE = {
 }
 
 
+def _strategy_prefix(strategy: str) -> str:
+    """根据优化策略返回差异化指令。"""
+    if strategy == "conservative":
+        return (
+            "【保守策略】仅润色表达和语法，不扩写、不增加新内容。\n"
+            "- rewritten_content 长度不得超过 original_content。\n"
+            "- 只改善用词、句式、逻辑连接词，删除冗余表达。\n"
+            "- 不添加任何原文未出现的关键词或技术名词。\n"
+            "- 保持原文的信息结构和顺序不变。"
+        )
+    if strategy == "aggressive":
+        return (
+            "【激进策略】最大化关键词覆盖和信息重组，优先匹配 JD。\n"
+            "- 允许扩写到原文 2.5 倍，充分融入 JD 关键词（仅限原文事实可支撑的）。\n"
+            "- 将与目标岗位最相关的技术/成果前置，调整信息优先级。\n"
+            "- 主动将 JD 关键词融入已有事实中（如原文提到 Python，JD 要 LangChain，\n"
+            "  可写“Python（含 LangChain 框架使用经验）”）。\n"
+            "- 允许重组段落结构，但不得虚构经历。"
+        )
+    # balanced
+    return (
+        "【均衡策略】适度扩写，STAR 重组，关键词自然融入。\n"
+        "- 允许扩写到原文 2 倍，在事实充分前提下增强表达质量。\n"
+        "- 动词精准化、量化表达、技术细节补充。\n"
+        "- JD 关键词仅在原文已有事实能够支撑时自然融入。\n"
+        "- 保持职业化克制，不为显得丰富而注水。"
+    )
+
+
 def build_section_rewrite_prompt(request: SectionRewriteRequest) -> str:
     """为一个可独立改写的段落构建自包含提示词。"""
     payload = request.model_dump()
     guidance = _SECTION_GUIDANCE[request.section_type]
+    strategy_text = _strategy_prefix(request.strategy)
     if request.original_content:
         original_length = len(request.original_content)
-        # 允许适度扩写：最多到原文的 2 倍，但不超过 600 字符，避免破坏排版
-        maximum_length = max(original_length * 2, original_length + 50)
-        maximum_length = min(maximum_length, 600)
+        if request.strategy == "conservative":
+            maximum_length = original_length
+        elif request.strategy == "aggressive":
+            maximum_length = min(max(original_length * 5 // 2, original_length + 100), 800)
+        else:
+            maximum_length = min(max(original_length * 2, original_length + 50), 600)
         layout_guidance = (
             f"为保持原简历排版，rewritten_content 最多 {maximum_length} 个字符，"
             "保持单段且不换行（不要输出换行符\\n）；"
-            "优先在原文长度内重组表达，在事实充分的前提下可以适度扩写以增强表达质量，"
-            "但不得为了显得丰富而注水。输出必须是纯文本，不含 Markdown 语法、项目符号或标题。"
+            "输出必须是纯文本，不含 Markdown 语法、项目符号或标题。"
         )
     else:
         layout_guidance = "原文为空时只生成紧凑的技能列表，保持单段且不换行。"
@@ -116,6 +148,8 @@ def build_section_rewrite_prompt(request: SectionRewriteRequest) -> str:
   "change_reason": "修改原因",
   "changes": [{{"type": "added|modified|removed", "description": "具体修改"}}]
 }}
+
+{strategy_text}
 
 约束：
 1. 不得编造输入中不存在的经历或能力。

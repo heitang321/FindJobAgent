@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
 import { Upload as UploadIcon, Loading, Search } from '@element-plus/icons-vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { checkHealth } from '@/api'
@@ -10,6 +11,78 @@ import JobCard from '@/components/JobCard.vue'
 const wf = useWorkflowStore()
 const healthStatus = ref('检测中...')
 const jdUrl = ref('')
+
+// ===== 岗位筛选（服务端筛选+分页）=====
+const filterCity = ref('')
+const filterExperience = ref('')
+const filterEducation = ref('')
+const filterKeyword = ref('')
+
+// 常用城市列表
+const cityOptions = [
+  '北京', '上海', '广州', '深圳', '杭州', '成都', '南京',
+  '武汉', '西安', '苏州', '重庆', '天津', '长沙', '郑州',
+  '东莞', '青岛', '合肥', '佛山', '宁波', '昆明', '厦门',
+]
+
+// 筛选可选项（从当前页结果推导）
+const experienceOptions = computed(() => {
+  const exps = new Set()
+  for (const card of wf.jobSearchResults) {
+    if (card.experience) exps.add(card.experience)
+  }
+  return [...exps]
+})
+const educationOptions = computed(() => {
+  const edus = new Set()
+  for (const card of wf.jobSearchResults) {
+    if (card.education) edus.add(card.education)
+  }
+  return [...edus]
+})
+
+const hasActiveFilters = computed(() =>
+  filterCity.value || filterExperience.value || filterEducation.value || filterKeyword.value
+)
+
+// 点击筛选按钮：重新搜索（服务端筛选+分页）
+async function applyFilters() {
+  wf.searchFilterCity = filterCity.value
+  wf.searchFilterExperience = filterExperience.value
+  wf.searchFilterEducation = filterEducation.value
+  wf.searchFilterKeyword = filterKeyword.value
+  wf.searchPage = 1
+  console.log('[applyFilters] city:', filterCity.value, 'exp:', filterExperience.value, 'edu:', filterEducation.value, 'kw:', filterKeyword.value)
+  try {
+    await wf.searchJobs()
+  } catch (e) {
+    console.error('[applyFilters] error:', e)
+    ElMessage.error(e.response?.data?.detail || e.message || '筛选失败')
+  }
+}
+
+// 清除筛选
+async function clearFilters() {
+  filterCity.value = ''
+  filterExperience.value = ''
+  filterEducation.value = ''
+  filterKeyword.value = ''
+  wf.resetSearchFilters()
+  try {
+    await wf.searchJobs()
+  } catch (e) {
+    console.error('[clearFilters] error:', e)
+    ElMessage.error(e.response?.data?.detail || e.message || '清除筛选失败')
+  }
+}
+
+// 翻页
+async function changePage(page) {
+  wf.searchPage = page
+  await wf.searchJobs()
+  // 滚动到岗位列表顶部
+  document.querySelector('.job-cards-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 // ===== 鼠标视差 =====
 const parallaxX = ref(0)
@@ -77,7 +150,7 @@ const showOptimizeButton = computed(() =>
     || (stage.value === 'error' && !!wf.jobRequirements && !!wf.gapReport),
 )
 const showOptimizeResult = computed(() =>
-  stage.value === 'done' && Boolean(wf.diffReport?.sections?.length),
+  stage.value === 'done' && Boolean((wf.currentVersionDiff?.sections?.length || wf.diffReport?.sections?.length)),
 )
 
 async function handleUpload(file) {
@@ -119,14 +192,21 @@ async function startOptimize() {
   } catch {}
 }
 
-async function download() {
-  const blob = await request.get(`/optimize/${wf.taskId}/download`, { responseType: 'blob' })
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `optimized_resume_${(wf.taskId || 'task').slice(0, 8)}.docx`
-  a.click()
-  window.URL.revokeObjectURL(url)
+async function download(strategy = 'balanced') {
+  try {
+    const blob = await request.get(`/optimize/${wf.taskId}/download`, {
+      params: { strategy },
+      responseType: 'blob',
+    })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `optimized_resume_${strategy}_${(wf.taskId || 'task').slice(0, 8)}.docx`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || e.message || '下载失败')
+  }
 }
 
 function reset() { jdUrl.value = ''; wf.reset() }
@@ -356,9 +436,46 @@ onUnmounted(() => { if (stepTimer) clearInterval(stepTimer) })
         <!-- 岗位卡片网格 -->
         <div v-if="wf.hasSearchResults" class="job-cards-grid">
           <div class="job-cards-header">
-            <span class="job-cards-count">找到 {{ wf.jobSearchResults.length }} 个岗位</span>
+            <span class="job-cards-count">共 {{ wf.searchTotal }} 个岗位 · 第 {{ wf.searchPage }}/{{ wf.searchTotalPages }} 页</span>
             <span v-if="wf.searchKeywords" class="job-cards-keywords">关键词：{{ wf.searchKeywords }}</span>
           </div>
+
+          <!-- 筛选栏（苹果风格） -->
+          <div class="filter-bar">
+            <div class="filter-select-wrap">
+              <select v-model="filterCity" class="filter-select">
+                <option value="">全国</option>
+                <option v-for="c in cityOptions" :key="c" :value="c">{{ c }}</option>
+              </select>
+              <span class="filter-arrow">⌄</span>
+            </div>
+            <div class="filter-select-wrap">
+              <select v-model="filterExperience" class="filter-select">
+                <option value="">经验不限</option>
+                <option v-for="e in experienceOptions" :key="e" :value="e">{{ e }}</option>
+              </select>
+              <span class="filter-arrow">⌄</span>
+            </div>
+            <div class="filter-select-wrap">
+              <select v-model="filterEducation" class="filter-select">
+                <option value="">学历不限</option>
+                <option v-for="e in educationOptions" :key="e" :value="e">{{ e }}</option>
+              </select>
+              <span class="filter-arrow">⌄</span>
+            </div>
+            <input
+              v-model="filterKeyword"
+              type="text"
+              class="filter-input"
+              placeholder="搜索职位/公司/技能"
+              @keyup.enter="applyFilters"
+            />
+            <button class="filter-btn" :disabled="wf.searchingJobs" @click="applyFilters">
+              {{ wf.searchingJobs ? '检索中...' : '筛选' }}
+            </button>
+            <button v-if="hasActiveFilters" class="filter-clear-btn" @click="clearFilters">清除</button>
+          </div>
+
           <div class="job-cards-list">
             <JobCard
               v-for="card in wf.jobSearchResults"
@@ -367,6 +484,28 @@ onUnmounted(() => { if (stepTimer) clearInterval(stepTimer) })
               :selected="wf.selectedJobCard?.url === card.url"
               @select="handleSelectCard"
             />
+          </div>
+
+          <!-- 分页 -->
+          <div v-if="wf.searchTotalPages > 1" class="pagination-bar">
+            <button
+              class="page-btn"
+              :disabled="wf.searchPage <= 1 || wf.searchingJobs"
+              @click="changePage(wf.searchPage - 1)"
+            >‹</button>
+            <button
+              v-for="p in wf.searchTotalPages"
+              :key="p"
+              class="page-btn"
+              :class="{ active: p === wf.searchPage }"
+              :disabled="wf.searchingJobs"
+              @click="changePage(p)"
+            >{{ p }}</button>
+            <button
+              class="page-btn"
+              :disabled="wf.searchPage >= wf.searchTotalPages || wf.searchingJobs"
+              @click="changePage(wf.searchPage + 1)"
+            >›</button>
           </div>
         </div>
 
@@ -429,38 +568,67 @@ onUnmounted(() => { if (stepTimer) clearInterval(stepTimer) })
         <div class="result-header">
           <div class="step-badge step-badge--done">✓</div>
           <h2 class="step-title">优化结果</h2>
-          <button class="download-btn" :disabled="!wf.downloadReady" @click="download">下载 Word</button>
+        </div>
+
+        <!-- 多版本选择 Tab -->
+        <div v-if="wf.optimizationVersions.length > 1" class="version-tabs">
+          <div
+            v-for="v in wf.optimizationVersions"
+            :key="v.strategy"
+            class="version-tab"
+            :class="{ active: wf.selectedVersion === v.strategy }"
+            @click="wf.selectVersion(v.strategy)"
+          >
+            <span class="version-tab-label">{{ v.label }}</span>
+            <span class="version-tab-desc">{{ v.description }}</span>
+          </div>
+        </div>
+
+        <div class="version-actions" v-if="wf.optimizationVersions.length">
+          <button
+            class="download-btn"
+            :disabled="!wf.currentVersionDownloadReady"
+            @click="download(wf.selectedVersion)"
+          >
+            下载 {{ wf.optimizationVersions.find(v => v.strategy === wf.selectedVersion)?.label || '' }} Word
+          </button>
+        </div>
+
+        <!-- 版本错误提示 -->
+        <div v-if="wf.currentVersionError" class="version-error glass-card">
+          <span class="version-error-icon">⚠</span>
+          <span class="version-error-text">该版本优化失败：{{ wf.currentVersionError }}</span>
         </div>
 
         <div class="stat-grid">
           <div class="stat-card">
-            <span class="stat-value">{{ wf.optimizationSummary?.added_count || 0 }}</span>
+            <span class="stat-value">{{ wf.currentVersionSummary?.added_count || 0 }}</span>
             <span class="stat-label">新增</span>
           </div>
           <div class="stat-card">
-            <span class="stat-value">{{ wf.optimizationSummary?.modified_count || 0 }}</span>
+            <span class="stat-value">{{ wf.currentVersionSummary?.modified_count || 0 }}</span>
             <span class="stat-label">修改</span>
           </div>
           <div class="stat-card">
-            <span class="stat-value">{{ wf.optimizationSummary?.rewritten_sections?.length || 0 }}</span>
+            <span class="stat-value">{{ wf.currentVersionSummary?.rewritten_sections?.length || 0 }}</span>
             <span class="stat-label">优化段落</span>
           </div>
           <div class="stat-card">
-            <span class="stat-value">{{ wf.optimizationSummary?.added_keywords?.length || 0 }}</span>
+            <span class="stat-value">{{ wf.currentVersionSummary?.added_keywords?.length || 0 }}</span>
             <span class="stat-label">新增关键词</span>
           </div>
         </div>
 
-        <div v-if="wf.optimizationSummary?.added_keywords?.length" class="keyword-block glass-card">
+        <div v-if="wf.currentVersionSummary?.added_keywords?.length" class="keyword-block glass-card">
           <span class="block-label">新增岗位关键词</span>
           <div class="tag-list">
-            <span v-for="kw in wf.optimizationSummary.added_keywords" :key="kw" class="pill-tag pill-tag--blue">{{ kw }}</span>
+            <span v-for="kw in wf.currentVersionSummary.added_keywords" :key="kw" class="pill-tag pill-tag--blue">{{ kw }}</span>
           </div>
         </div>
 
-        <div v-if="wf.diffReport?.sections?.length" class="diff-list">
+        <div v-if="wf.currentVersionDiff?.sections?.length" class="diff-list">
           <div
-            v-for="(section, idx) in wf.diffReport.sections"
+            v-for="(section, idx) in wf.currentVersionDiff.sections"
             :key="`${section.section_type}-${section.section_index}`"
             class="diff-card glass-card"
             v-reveal="{ delay: idx * 80 }"
@@ -795,6 +963,150 @@ onUnmounted(() => { if (stepTimer) clearInterval(stepTimer) })
 /* ===== Job cards grid ===== */
 .job-cards-grid {
   margin-top: 24px;
+}
+
+/* 筛选栏（苹果风格） */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: var(--apple-card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--apple-border);
+  border-radius: 16px;
+  box-shadow: var(--apple-shadow-sm);
+}
+
+.filter-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 8px 32px 8px 16px;
+  border: 1px solid var(--apple-gray-5);
+  border-radius: 980px;
+  font-size: 14px;
+  color: var(--apple-gray-1);
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.filter-select:focus {
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+}
+
+.filter-arrow {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  color: var(--apple-gray-4);
+  font-size: 14px;
+}
+
+.filter-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 16px;
+  border: 1px solid var(--apple-gray-5);
+  border-radius: 980px;
+  font-size: 14px;
+  color: var(--apple-gray-1);
+  background: #fff;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.filter-input:focus {
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+}
+
+.filter-btn {
+  padding: 8px 20px;
+  background: var(--apple-blue);
+  color: #fff;
+  border: none;
+  border-radius: 980px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-spring);
+}
+
+.filter-btn:hover:not(:disabled) {
+  background: var(--apple-blue-hover);
+  transform: scale(1.03);
+}
+
+.filter-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filter-clear-btn {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--apple-gray-3);
+  border: 1px solid var(--apple-gray-5);
+  border-radius: 980px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-clear-btn:hover {
+  color: var(--apple-gray-1);
+  border-color: var(--apple-gray-3);
+}
+
+/* 分页 */
+.pagination-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 8px;
+}
+
+.page-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--apple-gray-5);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--apple-gray-2);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-btn:hover:not(:disabled):not(.active) {
+  border-color: var(--apple-blue);
+  color: var(--apple-blue);
+}
+
+.page-btn.active {
+  background: var(--apple-blue);
+  border-color: var(--apple-blue);
+  color: #fff;
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .job-cards-header {
@@ -1135,6 +1447,74 @@ onUnmounted(() => { if (stepTimer) clearInterval(stepTimer) })
   font-size: 14px;
   color: var(--apple-gray-2);
   line-height: 1.6;
+}
+
+/* ===== Version tabs ===== */
+.version-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.version-tab {
+  flex: 1;
+  padding: 16px 20px;
+  border-radius: var(--apple-radius);
+  border: 2px solid var(--apple-border);
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-spring);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.version-tab:hover {
+  border-color: var(--apple-blue);
+  transform: translateY(-2px);
+}
+
+.version-tab.active {
+  border-color: var(--apple-blue);
+  background: rgba(0, 113, 227, 0.04);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.08);
+}
+
+.version-tab-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--apple-gray-1);
+}
+
+.version-tab-desc {
+  font-size: 12px;
+  color: var(--apple-gray-4);
+}
+
+.version-actions {
+  margin-bottom: 20px;
+}
+
+.version-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  background: rgba(255, 59, 48, 0.08);
+  border: 1px solid rgba(255, 59, 48, 0.25);
+  border-radius: 12px;
+}
+
+.version-error-icon {
+  font-size: 18px;
+  color: var(--apple-red, #ff3b30);
+}
+
+.version-error-text {
+  font-size: 14px;
+  color: var(--apple-red, #ff3b30);
+  line-height: 1.5;
 }
 
 /* ===== Reset ===== */

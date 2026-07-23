@@ -104,6 +104,7 @@ def _ensure_resume_task_columns() -> None:
         "jd_url": "TEXT NULL",
         "job_search_results": "JSON NULL",
         "selected_jd_url": "TEXT NULL",
+        "optimization_versions": "JSON NULL",
     }
     for column_name, column_type in required.items():
         if column_name in existing:

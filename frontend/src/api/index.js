@@ -41,12 +41,19 @@ export const submitJdUrl = (taskId, jdUrl) =>
 
 /** 根据简历内容自动检索 zhaopin 岗位，返回岗位卡片列表供用户选择
  *  keywords 留空时后端从简历 skills 自动推导
+ *  支持服务端筛选 + 分页
  */
-export const searchJobs = (taskId, { keywords = '', city = '', maxResults = 10 } = {}) =>
+export const searchJobs = (taskId, params = {}) =>
   request.post(`/job/${taskId}/search`, {
-    keywords: keywords || null,
-    city,
-    max_results: maxResults,
+    keywords: params.keywords || null,
+    city: params.city || '',
+    max_results: params.maxResults || 30,
+    filter_city: params.filterCity || '',
+    filter_experience: params.filterExperience || '',
+    filter_education: params.filterEducation || '',
+    filter_keyword: params.filterKeyword || '',
+    page: params.page || 1,
+    page_size: params.pageSize || 10,
   })
 
 /** 触发 Agent 3 简历优化 */
@@ -72,8 +79,11 @@ export const getChatMessages = (sessionId) =>
 export const deleteChatSession = (sessionId) =>
   request.delete(`/chat/sessions/${sessionId}`)
 
-/** 下载优化后的 Word 简历 */
-export const downloadOptimizedResume = (taskId) =>
-  request.get(`/optimize/${taskId}/download`, { responseType: 'blob' })
+/** 下载优化后的 Word 简历（默认均衡版，可选保守/激进版） */
+export const downloadOptimizedResume = (taskId, strategy = 'balanced') =>
+  request.get(`/optimize/${taskId}/download`, {
+    params: { strategy },
+    responseType: 'blob',
+  })
 
 

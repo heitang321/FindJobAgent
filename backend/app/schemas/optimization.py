@@ -14,6 +14,19 @@ SectionType = Literal[
     "skills",
 ]
 ChangeType = Literal["added", "modified", "removed"]
+OptimizationStrategy = Literal["conservative", "balanced", "aggressive"]
+
+STRATEGY_LABELS: dict[str, str] = {
+    "conservative": "保守版",
+    "balanced": "均衡版",
+    "aggressive": "激进版",
+}
+
+STRATEGY_DESCRIPTIONS: dict[str, str] = {
+    "conservative": "仅润色表达，不扩写，保持原文长度",
+    "balanced": "适度扩写，STAR 重组，关键词自然融入",
+    "aggressive": "最大化关键词覆盖，信息重排，优先匹配 JD",
+}
 
 
 class SectionChange(BaseModel):
@@ -32,6 +45,7 @@ class SectionRewriteRequest(BaseModel):
     gap_report: dict[str, Any] = Field(default_factory=dict)
     job_requirements: dict[str, Any] = Field(default_factory=dict)
     job_keywords: list[str] = Field(default_factory=list)
+    strategy: OptimizationStrategy = "balanced"
 
 
 class SectionRewriteResult(BaseModel):
@@ -87,6 +101,19 @@ class OptimizationTriggerResponse(BaseModel):
     current_stage: str
 
 
+class OptimizationVersionData(BaseModel):
+    """单个策略版本的优化结果。"""
+
+    strategy: str
+    label: str
+    description: str
+    optimized_resume: dict[str, Any] = Field(default_factory=dict)
+    diff_report: dict[str, Any] = Field(default_factory=dict)
+    optimization_summary: dict[str, Any] = Field(default_factory=dict)
+    download_ready: bool = False
+    error: str | None = None
+
+
 class OptimizationResultResponse(BaseModel):
     task_id: str
     current_stage: str
@@ -95,3 +122,4 @@ class OptimizationResultResponse(BaseModel):
     diff_report: dict[str, Any] = Field(default_factory=dict)
     optimization_summary: dict[str, Any] = Field(default_factory=dict)
     download_ready: bool = False
+    optimization_versions: list[OptimizationVersionData] = Field(default_factory=list)

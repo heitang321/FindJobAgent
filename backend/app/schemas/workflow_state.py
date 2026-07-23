@@ -92,6 +92,8 @@ class WorkflowState(TypedDict, total=False):
     diff_report: dict[str, Any]
     output_file_path: str | None
     optimization_summary: dict[str, Any]
+    # 多版本优化结果：{"conservative": {...}, "balanced": {...}, "aggressive": {...}}
+    optimization_versions: dict[str, Any]
 
 
 def initial_workflow_state(
@@ -126,4 +128,5 @@ def initial_workflow_state(
         "diff_report": {},
         "output_file_path": None,
         "optimization_summary": {},
+        "optimization_versions": {},
     }

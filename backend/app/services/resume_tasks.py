@@ -32,6 +32,7 @@ _JSON_STATE_FIELDS = {
     "optimized_resume",
     "diff_report",
     "optimization_summary",
+    "optimization_versions",
 }
 
 _STATE_COLUMN_MAP: dict[str, str] = {
@@ -57,6 +58,7 @@ _STATE_COLUMN_MAP: dict[str, str] = {
     "diff_report": "diff_report",
     "output_file_path": "output_file_path",
     "optimization_summary": "optimization_summary",
+    "optimization_versions": "optimization_versions",
 }
 
 
@@ -99,6 +101,7 @@ def _orm_to_state(task: ResumeTask) -> WorkflowState:
         diff_report=task.diff_report or {},
         output_file_path=task.output_file_path,
         optimization_summary=task.optimization_summary or {},
+        optimization_versions=task.optimization_versions or {},
     )
 
 
